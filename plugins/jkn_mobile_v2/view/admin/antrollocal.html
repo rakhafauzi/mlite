@@ -1,0 +1,104 @@
+<style media="screen">
+  th,
+  td {
+    white-space: nowrap;
+    vertical-align: top !important;
+  }
+</style>
+<div class="row">
+  <div class="col-xs-12 col-sm-12 col-md-12 col-lg-12">
+    <div class="panel panel-default">
+      <div class="panel-heading">
+        <div class="btn-group pull-right" style="margin-top:-8px;">
+          <span class="btn btn-sm dropdown-toggle" data-toggle="dropdown">
+            <i class="fa fa-calendar"></i><span class="hidden-xs"> Periode Antrol</span>
+          </span>
+          <ul class="dropdown-menu dropdown-menu-right">
+            <form class="" action="{?=url([ADMIN,'jkn_mobile_v2','antrollocal'])?}" method="POST">
+              <li style="padding-left:5px;padding-right:5px;">
+                <input type="text" id="periode_antrol" class="form-control periode_antrol" name="periode_antrol"
+                  required>
+              </li>
+              <li style="padding-left:5px;padding-right:5px;margin-top:5px;">
+                <input type="submit" name="" class="btn btn-primary btn-block" value="Submit">
+              </li>
+            </form>
+          </ul>
+        </div>
+        <h3 class="panel-title">Dashboard Antrian Online Local JKN Mobile</h3>
+      </div>
+      <div class="panel-body">
+        <div class="table-responsive no-margin">
+          <table class="table table-striped table-condensed no-margin display no-wrap" width="100%">
+            <thead>
+              <tr>
+                <th>No RM</th>
+                <th>Tanggal</th>
+                <th>No Rawat</th>
+                <th>Keterangan</th>
+                <th>Nomor Referensi</th>
+                <th>Kode Booking</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loop: $taskid}
+              <tr>
+                <td>{$value.no_rkm_medis} {$value.nm_pasien}</td>
+                <td>{$value.tanggal_periksa}</td>
+                <td>{$value.no_rawat} <a href="{?=url([ADMIN, 'jkn_mobile_v2', 'modalantrol', $value.no_rawat_conv , $value.kodebooking])?}" data-toggle="modal" data-target="#asuransiModal">Cek</a></td>
+                <td>{$value.keterangan}</td>
+                <td>{$value.nomor_referensi}</td>
+                <td>{$value.kodebooking}</td>
+              </tr>
+              {/loop}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div> 
+<div class="row">
+  <div class="col-md-4">
+    <a href="{?=url(['jknmobile_v2','antrian','add','?tgl='.$tgl])?}" target=”_blank” class="btn btn-secondary">Kirim Add Antrian</a>
+  </div>
+  <div class="col-md-4">
+    <button onclick="resetGagalAntrol()" id="resetgagal" data-tgl="{$tgl}">Reset Add Antrian {$tgl}</button>
+  </div>
+  <div class="col-md-4">
+    <a href="{?=url([ADMIN, 'jkn_mobile_v2', 'antroltasklocal', $tgl])?}" class="btn btn-secondary">Task ID Gagal</a>
+  </div>
+</div>
+<div class="modal fade" id="asuransiModal" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      ...
+    </div>
+  </div>
+</div>
+<script type="text/javascript">
+  $(function () {
+    $('.periode_antrol').datetimepicker({
+      defaultDate: "{?=date('Y-m-d')?}",
+      format: 'YYYY-MM-DD',
+      locale: 'id'
+    });
+  });
+
+  function resetGagalAntrol() {
+    var id = document.getElementById('resetgagal');
+    var tgl = id.getAttribute('data-tgl');
+    var obj = new Object();
+    obj.tgl = tgl;
+    var jsonString= JSON.stringify(obj);
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+         if (this.readyState == 4 && this.status == 200) {
+             alert(this.responseText);
+         }
+    };
+    xhttp.open("POST", "{?=url([ADMIN,'jkn_mobile_v2','resetgagalantrol'])?}", true);
+    xhttp.setRequestHeader("Content-type", "application/json");
+    xhttp.send(jsonString);
+  }
+</script>

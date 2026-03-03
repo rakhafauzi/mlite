@@ -1,0 +1,163 @@
+<article class="row">
+    <div class="col-md-6">
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h3 class="panel-title">
+                    Batalkan MJKN
+                </h3>
+            </div>
+            <div class="panel-body">
+                <div class="form-group">
+                    <label for="tanggal">Tanggal Cari</label>
+                    <input type="date" name="tanggal" id="tanggal" class="form-control">
+                </div>
+                <div class="form-group">
+                    <button type="button" class="btn btn-primary" onclick="cekAktifAntrol()" id="cek">Cek</button>
+                </div>
+            </div>
+        </div>
+        <div class="panel panel-default">
+            <div class="panel-body">
+                <div class="form-group">
+                    <label for="tanggalantrol">Tanggal Antrol</label>
+                    <input type="date" name="tanggalantrol" id="tanggalantrol" class="form-control">
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h3 class="panel-title">
+                    List Antrian
+                </h3>
+            </div>
+            <div class="panel-body">
+                <div id="tampil"></div>
+            </div>
+        </div>
+    </div>
+</article>
+<script>
+    function cekAktifAntrol() {
+        var cek = document.getElementById('cek')
+        cek.classList.remove('btn-primary')
+        var tgl = document.getElementById('tanggal').value
+        var tglantrol = document.getElementById('tanggalantrol').value
+
+        console.log(tgl);
+        const xhttp = new XMLHttpRequest();
+
+        xhttp.onload = function () {
+            respawn = JSON.parse(this.responseText)
+            console.log(respawn.response);
+            var output = '';
+            var button = '';
+            if (respawn.metaData.code == 200) {
+                respawn.response.forEach(element => {
+                    if (element.status != 'Batal') {
+                        button = " <button class='btn btn-warning btn-xs' onclick='batalAntrianMjkn(this)' data-kodebooking = '" + element.kodebooking + "'>Batalkan</button>";
+                    }
+                    if (element.status == 'Batal') {
+                        button = " <button class='btn btn-info btn-xs' onclick='kirimUlangMjkn(this)' data-nomr = '" + element.norekammedis + "'>Kirim Ulang Antrian</button>";
+                    }
+                    output += '<div class="card">Nomor Referensi : ' + element.nomorreferensi + '</div>'
+                    output += '<div class="card">Sumber Antrian : ' + element.sumberdata + '</div>'
+                    output += '<div class="card">Kodebooking : ' + element.kodebooking + button + ' </div>'
+                    output += '<div class="card">No MR Pasien : ' + element.norekammedis + '</div>'
+                    output += '<div class="card">Kode Poli : ' + element.kodepoli + '</div>'
+                    output += '<div class="card">Status Antrian : ' + element.status + '</div>'
+                    output += '<br>'
+
+                });
+                document.getElementById('tampil').innerHTML = output
+                cek.classList.add('btn-primary')
+            } else {
+                alert(respawn.metaData.message)
+                cek.classList.add('btn-primary')
+            }
+        }
+
+        // Send a request
+        xhttp.open("GET", "{?=url('/jknmobile_v2/antrian/pertanggal/')?}/" + tgl);
+        // xhttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+        xhttp.send();
+    }
+    function batalAntrianMjkn(d) {
+        nomr = d.getAttribute("data-kodebooking");
+        if (confirm('Apakah ingin membatalkan pendaftaran pasien MJKN ini ?')) {
+            var cek = document.getElementById('cek')
+            cek.classList.remove('btn-primary')
+            var tgl = document.getElementById('tanggal').value
+            var tglantrol = document.getElementById('tanggalantrol').value
+                // Save it!
+            const xhttp = new XMLHttpRequest();
+
+            xhttp.onload = function () {
+                respawn = JSON.parse(this.responseText)
+                console.log(respawn);
+                var output = '';
+                var button = '';
+                if (respawn.metadata.code == 200) {
+                    alert(respawn.metadata.message)
+                    cek.classList.add('btn-primary')
+                } else {
+                    alert(respawn.metadata.message)
+                    cek.classList.add('btn-primary')
+                }
+            }
+
+            // Send a request
+            xhttp.open("POST", "{?=url('/jknmobile_v2/batalmanual/')?}/" + nomr);
+            // xhttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+            xhttp.send();
+            console.log('Thing was saved to the database.' + nomr);
+        } else {
+            // Do nothing!
+            console.log('Thing was not saved to the database.');
+        }
+    }
+
+    function kirimUlangMjkn(d) {
+        var tglantrol = document.getElementById('tanggalantrol').value
+        nomr = d.getAttribute("data-nomr");
+        console.log(nomr+' '+tglantrol);
+        if (tglantrol == '') {
+            alert('Tanggal Kosong')
+        } else {
+            // console.log(nomr+' '+tglantrol);
+            if (confirm('Apakah ingin mengirimkan ulang pendaftaran pasien MJKN ini ?')) {
+                // Save it!
+                var cek = document.getElementById('cek')
+                cek.classList.remove('btn-primary')
+                var tgl = document.getElementById('tanggal').value
+                var tglantrol = document.getElementById('tanggalantrol').value
+                    // Save it!
+                const xhttp = new XMLHttpRequest();
+
+                xhttp.onload = function () {
+                    respawn = JSON.parse(this.responseText)
+                    console.log(respawn);
+                    var output = '';
+                    var button = '';
+                    if (respawn.metadata.code == 200) {
+                        alert(respawn.metadata.message)
+                        cek.classList.add('btn-primary')
+                    } else {
+                        alert(respawn.metadata.message)
+                        cek.classList.add('btn-primary')
+                    }
+                }
+
+                // Send a request
+                xhttp.open("POST", "{?=url('/jknmobile_v2/antrian/addmanual/')?}/" + nomr+"/"+tglantrol);
+                // xhttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+                xhttp.send();
+                console.log('Thing was saved to the database.' + nomr);
+            } else {
+                // Do nothing!
+                console.log('Thing was not saved to the database.');
+            }
+        }
+    }
+</script>

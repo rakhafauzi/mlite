@@ -1,0 +1,99 @@
+<style media="screen">
+    table td,
+    table th {
+        padding: 5px;
+    }
+</style>
+<div class="modal-header">
+    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span>
+        Tutup</button>
+    <h4 class="modal-title">Data Pasien</h4>
+</div>
+<div class="modal-body">
+    <div class="row clearfix">
+        <div class="col-md-4">
+            <div class="form-group">
+                <label for="">Nama</label>
+                <input type="text" class="form-control" value="{$antrol.nm_pasien}">
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="form-group">
+                <label for="">No Rekam Medis</label>
+                <input type="text" class="form-control" id="no_rkm_medis" value="{$antrol.no_rkm_medis}">
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="form-group">
+                <label for="">NIK</label>
+                <input type="text" class="form-control" id="nik" value="{$antrol.nik}">
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="form-group">
+                <label for="">No Peserta</label>
+                <input type="text" class="form-control" id="no_kartu" value="{$antrol.no_peserta}">
+            </div>
+        </div>
+    </div>
+    <div class="row clearfix">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label for="">No Referensi</label>
+                <input type="text" class="form-control" id="noref" value="{$antrol.noref}">
+            </div>
+        </div>
+    </div>
+    <div class="row clearfix">
+        <div class="col-md-4">
+            <button onclick="getKTP()">Tarik KTP</button>
+        </div>
+        <div class="col-md-4">
+            <button onclick="postKtp()">Ubah Data Pasien</button>
+        </div>
+    </div>
+</div>
+<div class="modal-footer">
+    <button type="button" class="btn btn-primary" data-dismiss="modal">Tutup</button>
+</div>
+<script>
+    function getKTP() {
+        var id = document.getElementById('no_kartu');
+        var xhttp = new XMLHttpRequest();
+        xhttp.onreadystatechange = function() {
+            if (this.readyState == 4 && this.status == 200) {
+                const obj = JSON.parse(this.responseText);
+                console.log(obj.response.peserta.nik);
+                if (obj.response.peserta.nik == null) {
+                    alert("Belum Terdaftar Di BPJS");
+                } else {
+                    $('#nik').val(obj.response.peserta.nik);
+                }
+                // alert(this.responseText);
+            }
+        };
+        xhttp.open("GET", "{?=url([ADMIN, 'vclaim', 'bynokartu', '"+id.value+"', '2023-10-23' ])?}", true);
+        xhttp.send();
+    }
+
+    function postKtp(params) {
+        var id = document.getElementById('no_rkm_medis').value;
+        var nik = document.getElementById('nik').value;
+        var noref = document.getElementById('noref').value;
+        var obj = new Object();
+        obj.id = id;
+        obj.nik = nik;
+        obj.noref = noref;
+        var jsonString= JSON.stringify(obj);
+        // console.log(jsonString);
+        var xhttp = new XMLHttpRequest();
+        xhttp.onreadystatechange = function() {
+            if (this.readyState == 4 && this.status == 200) {
+                alert(this.responseText);
+            }
+        };
+        xhttp.open("POST", "{?=url([ADMIN,'jkn_mobile_v2','pasiennik'])?}", true);
+        xhttp.setRequestHeader("Content-type", "application/json");
+        xhttp.send(jsonString);
+    }
+</script>

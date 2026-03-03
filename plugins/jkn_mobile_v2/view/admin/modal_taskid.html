@@ -1,0 +1,105 @@
+<style media="screen">
+    table td,
+    table th {
+        padding: 5px;
+    }
+</style>
+<div class="modal-header">
+    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span>
+        Tutup</button>
+    <h4 class="modal-title">Data Antrian Online {$nm_pasien}</h4>
+</div>
+<div class="modal-body">
+    <div class="row clearfix">
+        <div class="col-md-4">
+            {loop: $antrol}
+            <div class="input-group">
+                <!-- <label for="" class="form-label">Task ID {$value.taskid}</label> -->
+                <span class="input-group-addon" id="basic-addon1">Task ID {$value.taskid}</span>
+                <input type="text" class="form-control waktu" id="task{$value.taskid}" value="{$value.waktu_manusia}">
+                <span class="input-group-btn">
+                    <button class="btn btn-success" onclick="ubahWaktu('{$value.taskid}')" type="button" {if: $value.status == 'Sudah'}disabled{/if}>Ubah</button>
+               </span>
+            </div>
+            {/loop}
+        </div>
+        <div class="col-md-8">
+            {loop: $antrol}
+            <div class="input-group">
+                <span class="input-group-addon" id="basic-addon1">Keterangan Task ID {$value.taskid}</span>
+                <input type="text" class="form-control" value="{$value.keterangan}">
+            </div>
+            {/loop}
+        </div>
+    </div>
+    <br>
+    <div class="row clearfix">
+        <div class="col-md-6">
+            {loop: $antrol}
+            <div class="input-group">
+                <span class="input-group-addon" id="basic-addon1">Task ID {$value.taskid} Timestamp</span>
+                <input type="text" class="form-control" value="{$value.waktu}">
+            </div>
+            {/loop}
+        </div>
+        <div class="col-md-4">
+            <div class="input-group">
+                <span class="input-group-addon" id="basic-addon1">No Referensi</span>
+                <input type="text" class="form-control" id="noref" value="{$noref}">
+            </div>
+        </div>
+    </div>
+    <br>
+    <!-- <div class="row clearfix">
+        <div class="col-md-4">
+            <button onclick="getKTP()">Tarik KTP</button>
+        </div>
+        <div class="col-md-4">
+            <button onclick="postKtp()">Ubah Data Pasien</button>
+        </div>
+    </div> -->
+</div>
+<div class="modal-footer">
+    <button type="button" class="btn btn-primary" data-dismiss="modal">Tutup</button>
+</div>
+<script>
+    $(function () {
+        $('.waktu').datetimepicker({
+            format: 'YYYY-MM-DD HH:mm:ss',
+            locale: 'id'
+        });
+    });
+    function getKTP() {
+        var id = document.getElementById('no_kartu');
+        var xhttp = new XMLHttpRequest();
+        xhttp.onreadystatechange = function () {
+            if (this.readyState == 4 && this.status == 200) {
+                const obj = JSON.parse(this.responseText);
+                console.log(obj.response.peserta.nik);
+                $('#nik').val(obj.response.peserta.nik);
+            }
+        };
+        xhttp.open("GET", "{?=url([ADMIN, 'vclaim', 'bynokartu', '" + id.value + "', '2023-10-23' ])?}", true);
+        xhttp.send();
+    }
+
+    function ubahWaktu(params) {
+        var id = document.getElementById('task'+params).value;
+        var nik = document.getElementById('noref').value;
+        var obj = new Object();
+        obj.id = id;
+        obj.nik = nik;
+        obj.tas = params;
+        var jsonString = JSON.stringify(obj);
+        // console.log(jsonString);
+        var xhttp = new XMLHttpRequest();
+        xhttp.onreadystatechange = function () {
+            if (this.readyState == 4 && this.status == 200) {
+                alert(this.responseText);
+            }
+        };
+        xhttp.open("POST", "{?=url([ADMIN,'jkn_mobile_v2','ubahwaktu'])?}", true);
+        xhttp.setRequestHeader("Content-type", "application/json");
+        xhttp.send(jsonString);
+    }
+</script>
