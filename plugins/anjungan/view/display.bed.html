@@ -13,7 +13,6 @@
   <link href="{?=url()?}/assets/css/font-awesome.css" rel="stylesheet">
   <script src="{?=url()?}/assets/jscripts/jquery.min.js"></script>
   <script src="{?=url()?}/assets/jscripts/bootstrap.min.js"></script>
-  <script type='text/javascript' src='//cdn.jsdelivr.net/jquery.marquee/1.4.0/jquery.marquee.min.js'></script>
   <style media="screen">
     body {
       font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
@@ -42,12 +41,33 @@
       color: #ffffff;
     }
 
-    .marquee {
-      width: 100%;
-      overflow: scroll;
-      height: calc(75vh);
-      /* border: 1px solid #ccc; */
-      background: #0264d6;
+    td, th {
+      border: none !important;
+    }
+
+    #bed-display-container {
+    width: 100%;
+    }
+
+    .scroll-container {
+        height: calc(90vh - 80px);
+        overflow: hidden;
+        position: relative;
+    }
+
+    .scroll-content {
+        position: absolute;
+        width: 100%;
+        animation: scrollUp 60s linear infinite;
+    }
+
+    @keyframes scrollUp {
+        0% {
+            transform: translateY(0);
+        }
+        100% {
+            transform: translateY(-50%);
+        }
     }
   </style>
 </head>
@@ -56,21 +76,23 @@
   <div class="container-fluid">
     <h1 class="display-3 text-center text-white m-3"><img class="logo" src="{?=url()?}/{?=isset_or($logo)?}" alt=""
         width="60px"> Bed Management {?=isset_or($settings.nama_instansi)?}</h1>
-    <table class="table table-bordered table-striped lead text-primary">
-      <thead class="bg-primary">
-        <tr>
-          <th width="30%">Bangsal</th>
-          <th width="20%">Kelas</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-    </table>
-    <div class="marquee" data-direction='up' data-duration='20000' startVisible='true' data-gap='10'
-      data-duplicated='false'>
+    <div id="bed-display-container">
       <table class="table table-bordered table-striped lead text-primary">
-        <tbody id="bed-display">
-        </tbody>
+        <thead class="bg-primary">
+          <tr>
+            <th width="30%">Bangsal</th>
+            <th width="20%">Kelas</th>
+            <th>Status</th>
+          </tr>
+        </thead>
       </table>
+      <div class="scroll-container">
+        <div class="scroll-content">
+          <table class="table table-bordered table-striped lead text-primary">  
+            <tbody id="bed-display"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
   <footer class="visible-lg visible-md bg-primary" style="padding:10px;z-index:1000;">
@@ -89,7 +111,6 @@
 
 </html>
 <script>
-  $('.marquee').marquee()
 
   $(document).ready(function () {
     loadBed();
