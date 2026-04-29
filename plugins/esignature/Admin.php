@@ -15,18 +15,26 @@ class Admin extends AdminModule
 
     public function getManage()
     {
-        $signatures = $this->db('esignatures')->desc('id')->limit(50)->toArray();
+        $signatures = $this->db('mlite_esignatures')->desc('id')->limit(50)->toArray();
         return $this->draw('manage.html', ['signatures' => htmlspecialchars_array($signatures)]);
     }
 
     public function getSettings()
     {
+        if ($this->core->getUserInfo('role') != 'admin') {
+            $this->notify('failure', 'Anda tidak memiliki hak akses untuk halaman ini.');
+            redirect(url([ADMIN, 'esignature', 'manage']));
+        }
         $master_berkas_digital = $this->db('master_berkas_digital')->toArray();
         return $this->draw('settings.html', ['settings' => $this->settings('esignature'), 'master_berkas_digital' => htmlspecialchars_array($master_berkas_digital)]);
     }
 
     public function postSettings()
     {
+        if ($this->core->getUserInfo('role') != 'admin') {
+            $this->notify('failure', 'Anda tidak memiliki hak akses untuk halaman ini.');
+            redirect(url([ADMIN, 'esignature', 'manage']));
+        }
         foreach ($_POST['esignature'] as $key => $val) {
             $this->settings('esignature', $key, $val);
         }
@@ -100,7 +108,7 @@ class Admin extends AdminModule
 
             $hash = hash_file('sha256', $path);
 
-            $save = $this->db('esignatures')->save([
+            $save = $this->db('mlite_esignatures')->save([
                 'ref_type' => $ref_type,
                 'ref_id' => $ref_id,
                 'signer_role' => $_POST['signer_role'] ?? 'unknown',
@@ -134,7 +142,7 @@ class Admin extends AdminModule
 
     public function getGeneratePdf($ref_type, $ref_id)
     {
-        $signatures = $this->db('esignatures')
+        $signatures = $this->db('mlite_esignatures')
             ->where('ref_type', $ref_type)
             ->where('ref_id', $ref_id)
             ->toArray();

@@ -69,4 +69,5 @@ volumes:
   php_backups:
   php_uploads:
   php_systems_data:
+  php_plugins:
   mysql_data:

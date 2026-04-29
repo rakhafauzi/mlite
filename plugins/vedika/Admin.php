@@ -2457,6 +2457,15 @@ class Admin extends AdminModule
             $result_detail['obat_operasi'][] = $obat_operasi;
           }
 
+          $result_detail['resep_pulang'] = $this->db('resep_pulang')
+            ->join('databarang', 'databarang.kode_brng=resep_pulang.kode_brng')
+            ->where('resep_pulang.no_rawat', $no_rawat)
+            ->toArray();
+
+          $result_detail['tambahan_biaya'] = $this->db('tambahan_biaya')
+            ->where('no_rawat', $no_rawat)
+            ->toArray();
+
        } else {
 
          $result_detail['billing'] = $this->db('mlite_billing')->where('no_rawat', $no_rawat)->like('kd_billing', 'RI%')->desc('id_billing')->oneArray();
@@ -2536,6 +2545,11 @@ class Admin extends AdminModule
            $jumlah_total_obat_operasi += $obat_operasi['harga'];
            $result_detail['obat_operasi'][] = $obat_operasi;
          }
+
+         $result_detail['resep_pulang'] = $this->db('resep_pulang')
+           ->join('databarang', 'databarang.kode_brng=resep_pulang.kode_brng')
+           ->where('resep_pulang.no_rawat', $no_rawat)
+           ->toArray();
 
        }
 
@@ -2885,6 +2899,10 @@ class Admin extends AdminModule
 
   public function getSettings()
   {
+    if ($this->core->getUserInfo('role') != 'admin') {
+        $this->notify('failure', 'Anda tidak memiliki hak akses untuk halaman ini.');
+        redirect(url([ADMIN, 'vedika', 'formsepvclaim']));
+    }
     $this->_addHeaderFiles();
     $this->assign['title'] = 'Pengaturan Modul Vedika';
     $this->assign['vedika'] = htmlspecialchars_array($this->settings('vedika'));
@@ -2895,6 +2913,10 @@ class Admin extends AdminModule
 
   public function postSaveSettings()
   {
+    if ($this->core->getUserInfo('role') != 'admin') {
+        $this->notify('failure', 'Anda tidak memiliki hak akses untuk halaman ini.');
+        redirect(url([ADMIN, 'vedika', 'formsepvclaim']));
+    }
     $_POST['vedika']['carabayar'] = implode(',', $_POST['vedika']['carabayar']);
     foreach ($_POST['vedika'] as $key => $val) {
       $this->settings('vedika', $key, $val);

@@ -333,7 +333,7 @@ class Admin extends AdminModule
   public function getApotekOnline()
   {
     $parsedown = new \Systems\Lib\Parsedown();
-    $readme_file = MODULES . '/veronisa/Help.md';
+    $readme_file = MODULES . '/veronisa/README.md';
     $readme =  $parsedown->text($this->tpl->noParse(file_get_contents($readme_file)));
     return $this->draw('apotekonline.html', ['readme' => $readme]);
   }
@@ -371,7 +371,8 @@ class Admin extends AdminModule
   public function getMonitoringDataKlaim()
   {
     $this->_addHeaderFiles();
-    return $this->draw('monitoringdataklaim.html', ['veronisa' => htmlspecialchars_array($this->assign)]);
+    $assign = is_array($this->assign) ? $this->assign : [];
+    return $this->draw('monitoringdataklaim.html', ['veronisa' => htmlspecialchars_array($assign)]);
   }
 
   public function getKirimApotikOnline($no_rawat)
@@ -1593,6 +1594,15 @@ public function postHapusResepResponse()
       $result_detail['obat_operasi'][] = $obat_operasi;
     }
 
+    $result_detail['resep_pulang'] = $this->db('resep_pulang')
+      ->join('databarang', 'databarang.kode_brng=resep_pulang.kode_brng')
+      ->where('resep_pulang.no_rawat', $no_rawat)
+      ->toArray();
+
+    $result_detail['tambahan_biaya'] = $this->db('tambahan_biaya')
+      ->where('no_rawat', $no_rawat)
+      ->toArray();
+
     $qr=QRCode::getMinimumQRCode($this->core->getUserInfo('fullname', null, true),QR_ERROR_CORRECT_LEVEL_L);
     //$qr=QRCode::getMinimumQRCode('Petugas: '.$this->core->getUserInfo('fullname', null, true).'; Lokasi: '.UPLOADS.'/invoices/'.$result['kd_billing'].'.pdf',QR_ERROR_CORRECT_LEVEL_L);
     $im=$qr->createImage(4,4);
@@ -1897,6 +1907,10 @@ public function postHapusResepResponse()
 
   public function getSettings()
   {
+    if ($this->core->getUserInfo('role') != 'admin') {
+        $this->notify('failure', 'Anda tidak memiliki hak akses untuk halaman ini.');
+        redirect(url([ADMIN, 'veronisa', 'index']));
+    }
     $this->_addHeaderFiles();
     $this->assign['title'] = 'Pengaturan Modul veronisa';
     $this->assign['veronisa'] = htmlspecialchars_array($this->settings('veronisa'));
@@ -1906,6 +1920,10 @@ public function postHapusResepResponse()
 
   public function postSaveSettings()
   {
+    if ($this->core->getUserInfo('role') != 'admin') {
+        $this->notify('failure', 'Anda tidak memiliki hak akses untuk halaman ini.');
+        redirect(url([ADMIN, 'veronisa', 'index']));
+    }
     foreach ($_POST['veronisa'] as $key => $val) {
       $this->settings('veronisa', $key, $val);
     }

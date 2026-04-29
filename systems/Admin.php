@@ -252,6 +252,58 @@ class Admin extends Main
             // Reset fail attempts for this IP
             $this->db('mlite_login_attempts')->where('ip', $_SERVER['REMOTE_ADDR'])->save(['attempts' => 0]);
 
+            // Check if OTP Login is enabled
+            if ($this->settings->get('settings.login_otp') === 'ya') {
+                $otp = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+                $expiresAt = date('Y-m-d H:i:s', time() + (10 * 60));
+                
+                // Save OTP to DB
+                $this->db('mlite_users')->where('id', $row['id'])->save(['otp_code' => $otp, 'otp_expires' => $expiresAt]);
+
+                // Set session variables for OTP pending state
+                $_SESSION['mlite_otp_pending'] = true;
+                $_SESSION['mlite_otp_user_id'] = $row['id'];
+                if ($remember_me) {
+                    $_SESSION['mlite_otp_remember_me'] = true;
+                }
+
+                try {
+                    // Send OTP to WhatsApp mapped from dokter/petugas.no_telp
+                    $number = '';
+                    $uname = trim((string)$row['username']);
+                    $dokter = $this->db('dokter')->where('kd_dokter', $uname)->oneArray();
+                    if (!empty($dokter) && !empty($dokter['no_telp'])) {
+                        $number = $dokter['no_telp'];
+                    } else {
+                        $petugas = $this->db('petugas')->where('nip', $uname)->oneArray();
+                        if (!empty($petugas) && !empty($petugas['no_telp'])) {
+                            $number = $petugas['no_telp'];
+                        }
+                    }
+                    if (!empty($number)) {
+                        $waServer = $this->settings->get('wagateway.server');
+                        $waToken = $this->settings->get('wagateway.token');
+                        $waSender = $this->settings->get('wagateway.phonenumber');
+                        if (!empty($waServer) && !empty($waToken) && !empty($waSender)) {
+                            $ch = curl_init();
+                            curl_setopt($ch, CURLOPT_URL, rtrim($waServer, '/') . '/wagateway/kirimpesan');
+                            curl_setopt($ch, CURLOPT_POST, 1);
+                            $message = 'Kode OTP Anda: ' . $otp . "\nKode ini berlaku 10 menit. JANGAN bagikan kode ini kepada siapapun.";
+                            curl_setopt($ch, CURLOPT_POSTFIELDS, 'type=text&api_key=' . urlencode($waToken) . '&sender=' . urlencode($waSender) . '&number=' . urlencode($number) . '&message=' . urlencode($message));
+                            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                            curl_exec($ch);
+                            curl_close($ch);
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // Ignore OTP sending errors
+                }
+
+                // Return true, but admin/index.php will catch the OTP pending state
+                return true;
+            }
+
+            // Normal successful login (no OTP login needed)
             $_SESSION['mlite_user']= $row['id'];
             $_SESSION['token']      = bin2hex(openssl_random_pseudo_bytes(6));
             $_SESSION['userAgent']  = $_SERVER['HTTP_USER_AGENT'];
@@ -306,10 +358,18 @@ class Admin extends Main
 
             if ($remember_me) {
                 $token = str_gen(64, "1234567890qwertyuiop[]asdfghjkl;zxcvbnm,./");
+                $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+                    || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower((string) $_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https');
 
                 $this->db('mlite_remember_me')->save(['user_id' => $row['id'], 'token' => $token, 'expiry' => time()+60*60*24*30]);
 
-                setcookie('mlite_remember', $row['id'].':'.$token, time()+60*60*24*365, '/');
+                setcookie('mlite_remember', $row['id'] . ':' . $token, [
+                    'expires' => time() + 60 * 60 * 24 * 365,
+                    'path' => '/',
+                    'secure' => $isHttps,
+                    'httponly' => true,
+                    'samesite' => 'Lax',
+                ]);
             }
             return true;
         } else {
@@ -341,9 +401,19 @@ class Admin extends Main
 
         // Delete remember_me token from database and cookie
         if (isset($_COOKIE['mlite_remember'])) {
-            $token = explode(':', $_COOKIE['mlite_remember']);
-            $this->db('mlite_remember_me')->where('user_id', $token[0])->where('token', $token[1])->delete();
-            setcookie('mlite_remember', null, -1, '/');
+            $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+                || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower((string) $_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https');
+            $token = explode(':', $_COOKIE['mlite_remember'], 2);
+            if (count($token) === 2 && ctype_digit($token[0]) && $token[1] !== '') {
+                $this->db('mlite_remember_me')->where('user_id', $token[0])->where('token', $token[1])->delete();
+            }
+            setcookie('mlite_remember', '', [
+                'expires' => time() - 3600,
+                'path' => '/',
+                'secure' => $isHttps,
+                'httponly' => true,
+                'samesite' => 'Lax',
+            ]);
         }
 
         session_unset();

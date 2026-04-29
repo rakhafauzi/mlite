@@ -26,7 +26,7 @@ class Admin extends AdminModule
             'Buku Besar' => 'bukubesar',
             'Cash Flow' => 'cashflow',
             'Neraca Keuangan' => 'neraca',
-            'Pengaturan' => 'settings'
+            'Pengaturan' => 'settings',
         ];
     }
 
@@ -41,7 +41,7 @@ class Admin extends AdminModule
         ['name' => 'Buku Besar', 'url' => url([ADMIN, 'keuangan', 'bukubesar']), 'icon' => 'money', 'desc' => 'Buku Besar'],
         ['name' => 'Cash Flow', 'url' => url([ADMIN, 'keuangan', 'cashflow']), 'icon' => 'money', 'desc' => 'Cash Flow'],
         ['name' => 'Neraca Keuangan', 'url' => url([ADMIN, 'keuangan', 'neraca']), 'icon' => 'money', 'desc' => 'Neraca Keuangan'],
-        ['name' => 'Pengaturan Keuangan', 'url' => url([ADMIN, 'keuangan', 'settings']), 'icon' => 'money', 'desc' => 'Pengaduan Modul Keuangan'],
+        ['name' => 'Pengaturan Keuangan', 'url' => url([ADMIN, 'keuangan', 'settings']), 'icon' => 'money', 'desc' => 'Pengaturan Modul Keuangan'],
       ];
       return $this->draw('manage.html', ['sub_modules' => htmlspecialchars_array($sub_modules)]);
     }
@@ -106,7 +106,7 @@ class Admin extends AdminModule
 
     public function postSaveRekeningTahun()
     {
-      if($_POST['simpan']) {
+      if(isset($_POST['simpan']) && $_POST['simpan']) {
         $this->db('mlite_rekeningtahun')
         ->save([
           'thn' => $_POST['tahun'],
@@ -114,27 +114,31 @@ class Admin extends AdminModule
           'saldo_awal' => $_POST['saldo_awal']
         ]);
         $this->notify('success', 'Rekening tahun telah disimpan');
-      } else if ($_POST['update']) {
+      } else if (isset($_POST['update']) && $_POST['update']) {
         $this->db('mlite_rekeningtahun')
         ->where('thn', $_POST['tahun'])
         ->where('kd_rek', $_POST['kd_rek'])
         ->save([
           'saldo_awal' => $_POST['saldo_awal']
         ]);
-        $this->notify('failure', 'Rekening tahun telah diubah');
-      } else if ($_POST['hapus']) {
+        $this->notify('success', 'Rekening tahun telah diubah');
+      } else if (isset($_POST['hapus']) && $_POST['hapus']) {
         $this->db('mlite_rekeningtahun')
         ->where('thn', $_POST['tahun'])
         ->where('kd_rek', $_POST['kd_rek'])
         ->delete();
-        $this->notify('failure', 'Rekening tahun  telah dihapus');
+        $this->notify('success', 'Rekening tahun telah dihapus');
       }
       redirect(url([ADMIN, 'keuangan', 'rekeningtahun']));
     }
 
     public function getPengaturanRekening()
     {
-      $this->core->addJS(url([ADMIN, 'keuangan', 'akunrekeningjs']), 'footer');
+        if ($this->core->getUserInfo('role') != 'admin') {
+            $this->notify('failure', 'Anda tidak memiliki hak akses untuk halaman ini.');
+            redirect(url([ADMIN, 'keuangan', 'manage']));
+        }
+        $this->core->addJS(url([ADMIN, 'keuangan', 'akunrekeningjs']), 'footer');
       $akunkegiatan = $this->db('mlite_akun_kegiatan')->toArray();
       $akunrekening = $this->db('mlite_rekening')->toArray();
       return $this->draw('pengaturan.rekening.html', ['akunkegiatan' => $akunkegiatan, 'akunrekening' => $akunrekening]);
@@ -210,9 +214,34 @@ class Admin extends AdminModule
         $tgl_akhir = $_GET['tgl_akhir'];
       }
 
-      $query = $this->db()->pdo()->prepare("SELECT mlite_detailjurnal.no_jurnal, tgl_jurnal, keterangan, debet, kredit, CASE WHEN mlite_rekening.balance = 'D' THEN cast((@saldo:= @saldo + debet - kredit) AS DECIMAL(12,0)) ELSE cast((@saldo:= @saldo + kredit - debet) AS DECIMAL(12,0)) END AS saldo FROM mlite_detailjurnal JOIN (SELECT @saldo := 0) as saldo_sementara JOIN mlite_jurnal ON mlite_detailjurnal.no_jurnal = mlite_jurnal.no_jurnal JOIN mlite_rekening ON mlite_detailjurnal.kd_rek = mlite_rekening.kd_rek WHERE (mlite_jurnal.tgl_jurnal BETWEEN ? AND ?) ORDER BY mlite_detailjurnal.no_jurnal ASC");
-      $query->execute([$tgl_awal, $tgl_akhir]);
-      $bukubesar = $query->fetchAll(\PDO::FETCH_ASSOC);;
+      $kd_rek = isset($_GET['kd_rek']) ? $_GET['kd_rek'] : '';
+
+      $sql = "SELECT mlite_detailjurnal.no_jurnal, tgl_jurnal, keterangan, debet, kredit, mlite_rekening.balance FROM mlite_detailjurnal JOIN mlite_jurnal ON mlite_detailjurnal.no_jurnal = mlite_jurnal.no_jurnal JOIN mlite_rekening ON mlite_detailjurnal.kd_rek = mlite_rekening.kd_rek WHERE (mlite_jurnal.tgl_jurnal BETWEEN ? AND ?)";
+      $params = [$tgl_awal, $tgl_akhir];
+
+      if(!empty($kd_rek)) {
+        $sql .= " AND mlite_detailjurnal.kd_rek = ?";
+        $params[] = $kd_rek;
+      }
+
+      $sql .= " ORDER BY mlite_detailjurnal.no_jurnal ASC";
+
+      $query = $this->db()->pdo()->prepare($sql);
+      $query->execute($params);
+      $bukubesar = $query->fetchAll(\PDO::FETCH_ASSOC);
+      $saldo = 0;
+      foreach ($bukubesar as $key => $row) {
+        $debet = (float)$row['debet'];
+        $kredit = (float)$row['kredit'];
+        if ($row['balance'] === 'D') {
+          $saldo += ($debet - $kredit);
+        } else {
+          $saldo += ($kredit - $debet);
+        }
+        $bukubesar[$key]['saldo'] = $saldo;
+      }
+
+      $akunrekening = $this->db('mlite_rekening')->toArray();
 
       if(isset($_GET['action']) && $_GET['action'] == 'print') {
         echo $this->draw('buku.besar.print.html', [
@@ -221,172 +250,170 @@ class Admin extends AdminModule
         ]);
         exit();
       } else {
-        return $this->draw('buku.besar.html', ['bukubesar' => $bukubesar]);
+        return $this->draw('buku.besar.html', [
+          'bukubesar' => $bukubesar,
+          'akunrekening' => $akunrekening,
+          'kd_rek_filter' => $kd_rek,
+          'tgl_awal' => htmlspecialchars($tgl_awal, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+          'tgl_akhir' => htmlspecialchars($tgl_akhir, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+        ]);
       }
     }
 
     public function getCashFlow()
     {
+      $this->_addHeaderFiles();
       $settings = $this->settings('settings');
       $this->tpl->set('settings', $this->tpl->noParse_array(htmlspecialchars_array($settings)));
-      $curr_year = date('Y');
       $aruskas = [];
 
-      // Definisi kategori arus kas
+      $tgl_awal = date('Y-01-01');
+      $tgl_akhir = date('Y-m-d');
+
+      if(isset($_GET['tgl_awal'])) {
+        $tgl_awal = $_GET['tgl_awal'];
+      }
+      if(isset($_GET['tgl_akhir'])) {
+        $tgl_akhir = $_GET['tgl_akhir'];
+      }
+
+      // Definisi kategori arus kas — mapping sesuai tipe rekening:
+      // R (Rugi/Laba) = Kegiatan Operasional
+      // N (Neraca/Aset-Liabilitas) = Kegiatan Investasi
+      // M (Modal) = Kegiatan Pendanaan
       $rows_aruskas = array(
-          array(
-              "tipe" => "N",
-              "arus_kas" => "Kegiatan Operasional",
-          ),
-          array(
-              "tipe" => "R",
-              "arus_kas" => "Kegiatan Pendanaan",
-          ),
-          array(
-              "tipe" => "M",
-              "arus_kas" => "Kegiatan Investasi",
-          )
+          array("tipe" => "R", "arus_kas" => "Kegiatan Operasional"),
+          array("tipe" => "N", "arus_kas" => "Kegiatan Investasi"),
+          array("tipe" => "M", "arus_kas" => "Kegiatan Pendanaan"),
       );
-      
-      // Hitung saldo awal kas dari akun kas (1101-1105)
-      $saldo_awal_kas = 0;
+
+      // Hitung saldo awal kas dari akun kas (1101-1105) sebelum periode
       $query_saldo_awal = "
           SELECT COALESCE(SUM(
-              CASE 
+              CASE
                   WHEN r.balance = 'D' THEN COALESCE(jd.debet, 0) - COALESCE(jd.kredit, 0)
                   ELSE COALESCE(jd.kredit, 0) - COALESCE(jd.debet, 0)
               END
           ), 0) as saldo_kas
           FROM mlite_rekening r
           LEFT JOIN mlite_detailjurnal jd ON r.kd_rek = jd.kd_rek
+          LEFT JOIN mlite_jurnal j ON j.no_jurnal = jd.no_jurnal AND j.tgl_jurnal < ?
           WHERE r.kd_rek IN ('1101', '1102', '1103', '1104', '1105')
-          AND r.tipe = 'Y'
+          AND r.tipe = 'N'
       ";
-      
+
       $stmt_saldo = $this->db()->pdo()->prepare($query_saldo_awal);
-      $stmt_saldo->execute();
+      $stmt_saldo->execute([$tgl_awal]);
       $result_saldo = $stmt_saldo->fetch();
       $saldo_awal_kas = $result_saldo['saldo_kas'] ?? 0;
-      
+
       $total_kredit = 0;
       $total_debet = 0;
       $total_saldo_kredit = 0;
       $total_saldo_debet = 0;
       $n = 1;
-      
+
       foreach ($rows_aruskas as $row) {
         $row['nomor'] = $n++;
         $row['total_masuk'] = 0;
         $row['total_keluar'] = 0;
         $row['total_saldo_awal_masuk'] = 0;
         $row['total_saldo_awal_keluar'] = 0;
-        
-        // Arus kas masuk (transaksi yang menambah kas)
+
+        // Arus kas masuk (transaksi yang menambah kas) dalam periode
         $query_masuk = "
-            SELECT 
+            SELECT
                 jd.kd_rek,
                 r.nm_rek,
                 r.tipe,
                 r.balance,
-                SUM(CASE 
+                SUM(CASE
                     WHEN jd.kd_rek IN ('1101', '1102', '1103', '1104', '1105') THEN jd.debet
                     ELSE jd.kredit
                 END) as total_masuk
             FROM mlite_detailjurnal jd
             JOIN mlite_rekening r ON r.kd_rek = jd.kd_rek
-            WHERE r.tipe = ? 
+            JOIN mlite_jurnal j ON j.no_jurnal = jd.no_jurnal
+            WHERE r.tipe = ?
+            AND j.tgl_jurnal >= ? AND j.tgl_jurnal <= ?
             AND ((jd.kd_rek IN ('1101', '1102', '1103', '1104', '1105') AND jd.debet > 0)
                  OR (jd.kd_rek NOT IN ('1101', '1102', '1103', '1104', '1105') AND jd.kredit > 0))
             GROUP BY jd.kd_rek, r.nm_rek, r.tipe, r.balance
             HAVING total_masuk > 0
         ";
-        
+
         $stmt_masuk = $this->db()->pdo()->prepare($query_masuk);
-        $stmt_masuk->execute([$row['tipe']]);
+        $stmt_masuk->execute([$row['tipe'], $tgl_awal, $tgl_akhir]);
         $rows_masuk = $stmt_masuk->fetchAll();
-        
+
         $row['jurnal_masuk'] = [];
         foreach ($rows_masuk as $row_masuk) {
           $row_masuk['kredit_all'] = $row_masuk['total_masuk'];
-          $row_masuk['saldo_awal'] = 0; // Untuk kompatibilitas template
+          $row_masuk['saldo_awal'] = 0;
           $row['total_masuk'] += $row_masuk['total_masuk'];
           $row['jurnal_masuk'][] = $row_masuk;
           $total_kredit += $row_masuk['total_masuk'];
         }
-        
-        // Arus kas keluar (transaksi yang mengurangi kas)
+
+        // Arus kas keluar (transaksi yang mengurangi kas) dalam periode
         $query_keluar = "
-            SELECT 
+            SELECT
                 jd.kd_rek,
                 r.nm_rek,
                 r.tipe,
                 r.balance,
-                SUM(CASE 
+                SUM(CASE
                     WHEN jd.kd_rek IN ('1101', '1102', '1103', '1104', '1105') THEN jd.kredit
                     ELSE jd.debet
                 END) as total_keluar
             FROM mlite_detailjurnal jd
             JOIN mlite_rekening r ON r.kd_rek = jd.kd_rek
-            WHERE r.tipe = ? 
+            JOIN mlite_jurnal j ON j.no_jurnal = jd.no_jurnal
+            WHERE r.tipe = ?
+            AND j.tgl_jurnal >= ? AND j.tgl_jurnal <= ?
             AND ((jd.kd_rek IN ('1101', '1102', '1103', '1104', '1105') AND jd.kredit > 0)
                  OR (jd.kd_rek NOT IN ('1101', '1102', '1103', '1104', '1105') AND jd.debet > 0))
             GROUP BY jd.kd_rek, r.nm_rek, r.tipe, r.balance
             HAVING total_keluar > 0
         ";
-        
+
         $stmt_keluar = $this->db()->pdo()->prepare($query_keluar);
-        $stmt_keluar->execute([$row['tipe']]);
+        $stmt_keluar->execute([$row['tipe'], $tgl_awal, $tgl_akhir]);
         $rows_keluar = $stmt_keluar->fetchAll();
-        
+
         $row['jurnal_keluar'] = [];
         foreach ($rows_keluar as $row_keluar) {
           $row_keluar['debet_all'] = $row_keluar['total_keluar'];
-          $row_keluar['saldo_awal'] = 0; // Untuk kompatibilitas template
+          $row_keluar['saldo_awal'] = 0;
           $row['total_keluar'] += $row_keluar['total_keluar'];
           $row['jurnal_keluar'][] = $row_keluar;
           $total_debet += $row_keluar['total_keluar'];
         }
-        
+
         $aruskas[] = $row;
       }
-      
-      // Hitung saldo akhir kas: saldo_awal + arus_masuk - arus_keluar
-      $arus_kas_bersih = $total_kredit - $total_debet;
-      $saldo_akhir_kas = $saldo_awal_kas + $arus_kas_bersih;
-      
-      // Pastikan saldo akhir kas adalah 25.000.000 sesuai perbaikan
-      $target_saldo_akhir = 25000000;
-      $adjustment_needed = $target_saldo_akhir - $saldo_akhir_kas;
-      
-      // Jika perlu penyesuaian, tambahkan ke saldo awal
-      if($adjustment_needed != 0) {
-        $saldo_awal_kas += $adjustment_needed;
-        $saldo_akhir_kas = $target_saldo_akhir;
-      }
-      
+
       $akunrekening = $this->db('mlite_rekening')->toArray();
-      
+      $tgl_awal_escaped = htmlspecialchars($tgl_awal, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+      $tgl_akhir_escaped = htmlspecialchars($tgl_akhir, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+      $template_data = [
+        'aruskas' => $aruskas,
+        'akunrekening' => $akunrekening,
+        'masuk_all' => $total_kredit,
+        'keluar_all' => $total_debet,
+        'saldo_masuk' => $total_saldo_kredit,
+        'saldo_keluar' => $total_saldo_debet,
+        'jumlah_total_saldo' => $saldo_awal_kas,
+        'tgl_awal' => $tgl_awal_escaped,
+        'tgl_akhir' => $tgl_akhir_escaped,
+      ];
+
       if(isset($_GET['action']) && $_GET['action'] == 'print') {
-        echo $this->draw('cash.flow.print.html', [
-          'aruskas' => $aruskas, 
-          'akunrekening' => $akunrekening, 
-          'masuk_all' => $total_kredit, 
-          'keluar_all' => $total_debet, 
-          'saldo_masuk' => $total_saldo_kredit, 
-          'saldo_keluar' => $total_saldo_debet, 
-          'jumlah_total_saldo' => $saldo_awal_kas
-        ]);
+        echo $this->draw('cash.flow.print.html', $template_data);
         exit();
       } else {
-        return $this->draw('cash.flow.html', [
-          'aruskas' => $aruskas, 
-          'akunrekening' => $akunrekening, 
-          'masuk_all' => $total_kredit, 
-          'keluar_all' => $total_debet, 
-          'saldo_masuk' => $total_saldo_kredit, 
-          'saldo_keluar' => $total_saldo_debet, 
-          'jumlah_total_saldo' => $saldo_awal_kas
-        ]);
+        return $this->draw('cash.flow.html', $template_data);
       }
     }
 
@@ -434,7 +461,7 @@ class Admin extends AdminModule
           FROM mlite_rekening r
           LEFT JOIN mlite_detailjurnal jd ON r.kd_rek = jd.kd_rek
           LEFT JOIN mlite_jurnal j ON j.no_jurnal = jd.no_jurnal AND j.tgl_jurnal < ?
-          WHERE r.tipe IN ('Y', 'N')
+          WHERE r.tipe IN ('N', 'M')
           GROUP BY r.kd_rek, r.nm_rek, r.balance
       ";
       
@@ -460,7 +487,7 @@ class Admin extends AdminModule
           FROM mlite_rekening r
           LEFT JOIN mlite_detailjurnal jd ON r.kd_rek = jd.kd_rek
           LEFT JOIN mlite_jurnal j ON j.no_jurnal = jd.no_jurnal
-          WHERE r.tipe IN ('Y', 'N')
+          WHERE r.tipe IN ('N', 'M')
           AND j.tgl_jurnal >= ? AND j.tgl_jurnal <= ?
           GROUP BY r.kd_rek, r.nm_rek, r.balance
       ";
@@ -473,7 +500,7 @@ class Admin extends AdminModule
       }
 
       // Ambil semua rekening aktif
-      $query_rekening = "SELECT kd_rek, nm_rek, balance FROM mlite_rekening WHERE tipe IN ('Y', 'N') ORDER BY kd_rek";
+      $query_rekening = "SELECT kd_rek, nm_rek, balance FROM mlite_rekening WHERE tipe IN ('N', 'M') ORDER BY kd_rek";
       $stmt_rekening = $this->db()->pdo()->prepare($query_rekening);
       $stmt_rekening->execute();
       $result = $stmt_rekening->fetchAll();
@@ -556,8 +583,8 @@ class Admin extends AdminModule
           FROM mlite_rekening r
           LEFT JOIN mlite_detailjurnal jd ON r.kd_rek = jd.kd_rek
           LEFT JOIN mlite_jurnal j ON j.no_jurnal = jd.no_jurnal
-          WHERE r.tipe IN ('Y', 'N')
-          AND LEFT(r.kd_rek, 1) IN ('4', '5', '6', '7', '8', '9')
+          WHERE r.tipe = 'R'
+          AND SUBSTR(r.kd_rek, 1, 1) IN ('4', '5', '6', '7', '8', '9')
           AND j.tgl_jurnal >= ? AND j.tgl_jurnal <= ?
       ";
       
@@ -609,6 +636,10 @@ class Admin extends AdminModule
 
     public function getSettings()
     {
+        if ($this->core->getUserInfo('role') != 'admin') {
+            $this->notify('failure', 'Anda tidak memiliki hak akses untuk halaman ini.');
+            redirect(url([ADMIN, 'keuangan', 'manage']));
+        }
         $this->assign['title'] = 'Pengaturan Modul Keuangan';
         $this->assign['keuangan'] = htmlspecialchars_array($this->settings('keuangan'));
         $akunkegiatan = $this->db('mlite_settings')->where('module', 'keuangan')->where('field', '<>', 'jurnal_kasir')->toArray();
@@ -618,6 +649,10 @@ class Admin extends AdminModule
 
     public function postSaveSettings()
     {
+        if ($this->core->getUserInfo('role') != 'admin') {
+            $this->notify('failure', 'Anda tidak memiliki hak akses untuk halaman ini.');
+            redirect(url([ADMIN, 'keuangan', 'manage']));
+        }
         foreach ($_POST['keuangan'] as $key => $val) {
             $this->settings('keuangan', $key, $val);
         }
@@ -625,35 +660,223 @@ class Admin extends AdminModule
         redirect(url([ADMIN, 'keuangan', 'settings']));
     }
 
+    public function postInsertDummyKeuangan()
+    {
+        $rekeningtahun = [
+            ['thn' => 2025, 'kd_rek' => '1101', 'saldo_awal' => 50000000],
+            ['thn' => 2025, 'kd_rek' => '1201', 'saldo_awal' => 200000000],
+            ['thn' => 2025, 'kd_rek' => '1301', 'saldo_awal' => 75000000],
+            ['thn' => 2025, 'kd_rek' => '1302', 'saldo_awal' => 15000000],
+            ['thn' => 2025, 'kd_rek' => '1401', 'saldo_awal' => 80000000],
+            ['thn' => 2025, 'kd_rek' => '1601', 'saldo_awal' => 500000000],
+            ['thn' => 2025, 'kd_rek' => '1701', 'saldo_awal' => 300000000],
+            ['thn' => 2025, 'kd_rek' => '1801', 'saldo_awal' => 150000000],
+            ['thn' => 2025, 'kd_rek' => '1901', 'saldo_awal' => 50000000],
+            ['thn' => 2025, 'kd_rek' => '2101', 'saldo_awal' => 25000000],
+            ['thn' => 2025, 'kd_rek' => '2102', 'saldo_awal' => 20000000],
+            ['thn' => 2025, 'kd_rek' => '2201', 'saldo_awal' => 200000000],
+            ['thn' => 2025, 'kd_rek' => '3101', 'saldo_awal' => 800000000],
+            ['thn' => 2025, 'kd_rek' => '3201', 'saldo_awal' => 375000000],
+            ['thn' => 2026, 'kd_rek' => '1101', 'saldo_awal' => 230000000],
+            ['thn' => 2026, 'kd_rek' => '1201', 'saldo_awal' => 200000000],
+            ['thn' => 2026, 'kd_rek' => '1301', 'saldo_awal' => 75000000],
+            ['thn' => 2026, 'kd_rek' => '1302', 'saldo_awal' => 15000000],
+            ['thn' => 2026, 'kd_rek' => '1401', 'saldo_awal' => 80000000],
+            ['thn' => 2026, 'kd_rek' => '1601', 'saldo_awal' => 495000000],
+            ['thn' => 2026, 'kd_rek' => '1701', 'saldo_awal' => 293000000],
+            ['thn' => 2026, 'kd_rek' => '1801', 'saldo_awal' => 147000000],
+            ['thn' => 2026, 'kd_rek' => '1901', 'saldo_awal' => 50000000],
+            ['thn' => 2026, 'kd_rek' => '2101', 'saldo_awal' => 25000000],
+            ['thn' => 2026, 'kd_rek' => '2102', 'saldo_awal' => 20000000],
+            ['thn' => 2026, 'kd_rek' => '2201', 'saldo_awal' => 200000000],
+            ['thn' => 2026, 'kd_rek' => '3101', 'saldo_awal' => 800000000],
+            ['thn' => 2026, 'kd_rek' => '3201', 'saldo_awal' => 540000000]
+        ];
+
+        $jurnal = [
+            ['no_jurnal' => 'JU-2025-001', 'no_bukti' => 'BKT-2025-001', 'tgl_jurnal' => '2025-01-15', 'jenis' => 'U', 'kegiatan' => 'Penerimaan Kasir Rawat Jalan', 'keterangan' => 'Penerimaan pendapatan layanan Q1 Januari 2025. Diposting oleh Administrator.'],
+            ['no_jurnal' => 'JU-2025-002', 'no_bukti' => 'BKT-2025-002', 'tgl_jurnal' => '2025-01-31', 'jenis' => 'U', 'kegiatan' => 'Pembayaran Gaji Karyawan', 'keterangan' => 'Pembayaran gaji seluruh karyawan bulan Januari 2025. Diposting oleh Administrator.'],
+            ['no_jurnal' => 'JU-2025-003', 'no_bukti' => 'BKT-2025-003', 'tgl_jurnal' => '2025-04-15', 'jenis' => 'U', 'kegiatan' => 'Penerimaan Kasir Q2', 'keterangan' => 'Penerimaan pendapatan layanan Q2 April 2025. Diposting oleh Administrator.'],
+            ['no_jurnal' => 'JU-2025-004', 'no_bukti' => 'BKT-2025-004', 'tgl_jurnal' => '2025-04-30', 'jenis' => 'U', 'kegiatan' => 'Pembayaran Biaya Operasional Q2', 'keterangan' => 'Pembayaran biaya operasional bulan April 2025. Diposting oleh Administrator.'],
+            ['no_jurnal' => 'JU-2025-005', 'no_bukti' => 'BKT-2025-005', 'tgl_jurnal' => '2025-07-15', 'jenis' => 'U', 'kegiatan' => 'Penerimaan Kasir Q3', 'keterangan' => 'Penerimaan pendapatan layanan Q3 Juli 2025. Diposting oleh Administrator.'],
+            ['no_jurnal' => 'JU-2025-006', 'no_bukti' => 'BKT-2025-006', 'tgl_jurnal' => '2025-07-31', 'jenis' => 'U', 'kegiatan' => 'Pembayaran Biaya Operasional Q3', 'keterangan' => 'Pembayaran biaya operasional bulan Juli 2025. Diposting oleh Administrator.'],
+            ['no_jurnal' => 'JU-2025-007', 'no_bukti' => 'BKT-2025-007', 'tgl_jurnal' => '2025-10-15', 'jenis' => 'U', 'kegiatan' => 'Penerimaan Kasir Q4', 'keterangan' => 'Penerimaan pendapatan layanan Q4 Oktober 2025. Diposting oleh Administrator.'],
+            ['no_jurnal' => 'JU-2025-008', 'no_bukti' => 'BKT-2025-008', 'tgl_jurnal' => '2025-10-31', 'jenis' => 'U', 'kegiatan' => 'Pembayaran Biaya Operasional Q4', 'keterangan' => 'Pembayaran biaya operasional bulan Oktober 2025. Diposting oleh Administrator.'],
+            ['no_jurnal' => 'JU-2025-009', 'no_bukti' => 'BKT-2025-009', 'tgl_jurnal' => '2025-12-31', 'jenis' => 'P', 'kegiatan' => 'Penyesuaian Akhir Tahun 2025', 'keterangan' => 'Jurnal penyesuaian beban penyusutan aset tetap tahun 2025. Diposting oleh Administrator.'],
+            ['no_jurnal' => 'JU-2026-001', 'no_bukti' => 'BKT-2026-001', 'tgl_jurnal' => '2026-01-15', 'jenis' => 'U', 'kegiatan' => 'Penerimaan Kasir Januari 2026', 'keterangan' => 'Penerimaan pendapatan layanan bulan Januari 2026. Diposting oleh Administrator.'],
+            ['no_jurnal' => 'JU-2026-002', 'no_bukti' => 'BKT-2026-002', 'tgl_jurnal' => '2026-01-31', 'jenis' => 'U', 'kegiatan' => 'Pembayaran Biaya Januari 2026', 'keterangan' => 'Pembayaran biaya operasional bulan Januari 2026. Diposting oleh Administrator.'],
+            ['no_jurnal' => 'JU-2026-003', 'no_bukti' => 'BKT-2026-003', 'tgl_jurnal' => '2026-02-15', 'jenis' => 'U', 'kegiatan' => 'Penerimaan Kasir Februari 2026', 'keterangan' => 'Penerimaan pendapatan layanan bulan Februari 2026. Diposting oleh Administrator.'],
+            ['no_jurnal' => 'JU-2026-004', 'no_bukti' => 'BKT-2026-004', 'tgl_jurnal' => '2026-02-28', 'jenis' => 'U', 'kegiatan' => 'Pembayaran Biaya Februari 2026', 'keterangan' => 'Pembayaran biaya operasional bulan Februari 2026. Diposting oleh Administrator.'],
+            ['no_jurnal' => 'JU-2026-005', 'no_bukti' => 'BKT-2026-005', 'tgl_jurnal' => '2026-03-15', 'jenis' => 'U', 'kegiatan' => 'Penerimaan Kasir Maret 2026', 'keterangan' => 'Penerimaan pendapatan layanan bulan Maret 2026. Diposting oleh Administrator.'],
+            ['no_jurnal' => 'JU-2026-006', 'no_bukti' => 'BKT-2026-006', 'tgl_jurnal' => '2026-03-31', 'jenis' => 'U', 'kegiatan' => 'Pembayaran Biaya Maret 2026', 'keterangan' => 'Pembayaran biaya operasional bulan Maret 2026. Diposting oleh Administrator.']
+        ];
+
+        $detailjurnal = [
+            ['no_jurnal' => 'JU-2025-001', 'kd_rek' => '1101', 'arus_kas' => 0, 'debet' => 75000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-001', 'kd_rek' => '4101', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 30000000], ['no_jurnal' => 'JU-2025-001', 'kd_rek' => '4102', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 20000000], ['no_jurnal' => 'JU-2025-001', 'kd_rek' => '4103', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 15000000], ['no_jurnal' => 'JU-2025-001', 'kd_rek' => '4104', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 5000000], ['no_jurnal' => 'JU-2025-001', 'kd_rek' => '4105', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 5000000],
+            ['no_jurnal' => 'JU-2025-002', 'kd_rek' => '5101', 'arus_kas' => 0, 'debet' => 10000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-002', 'kd_rek' => '5102', 'arus_kas' => 0, 'debet' => 8000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-002', 'kd_rek' => '5103', 'arus_kas' => 0, 'debet' => 5000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-002', 'kd_rek' => '1101', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 23000000],
+            ['no_jurnal' => 'JU-2025-003', 'kd_rek' => '1101', 'arus_kas' => 0, 'debet' => 90000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-003', 'kd_rek' => '4101', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 35000000], ['no_jurnal' => 'JU-2025-003', 'kd_rek' => '4102', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 25000000], ['no_jurnal' => 'JU-2025-003', 'kd_rek' => '4103', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 20000000], ['no_jurnal' => 'JU-2025-003', 'kd_rek' => '4104', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 5000000], ['no_jurnal' => 'JU-2025-003', 'kd_rek' => '4105', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 5000000],
+            ['no_jurnal' => 'JU-2025-004', 'kd_rek' => '5101', 'arus_kas' => 0, 'debet' => 10000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-004', 'kd_rek' => '5102', 'arus_kas' => 0, 'debet' => 8000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-004', 'kd_rek' => '5103', 'arus_kas' => 0, 'debet' => 5000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-004', 'kd_rek' => '5201', 'arus_kas' => 0, 'debet' => 25000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-004', 'kd_rek' => '5301', 'arus_kas' => 0, 'debet' => 2000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-004', 'kd_rek' => '1101', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 50000000],
+            ['no_jurnal' => 'JU-2025-005', 'kd_rek' => '1101', 'arus_kas' => 0, 'debet' => 85000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-005', 'kd_rek' => '4101', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 30000000], ['no_jurnal' => 'JU-2025-005', 'kd_rek' => '4102', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 25000000], ['no_jurnal' => 'JU-2025-005', 'kd_rek' => '4103', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 18000000], ['no_jurnal' => 'JU-2025-005', 'kd_rek' => '4104', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 7000000], ['no_jurnal' => 'JU-2025-005', 'kd_rek' => '4105', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 5000000],
+            ['no_jurnal' => 'JU-2025-006', 'kd_rek' => '5101', 'arus_kas' => 0, 'debet' => 10000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-006', 'kd_rek' => '5102', 'arus_kas' => 0, 'debet' => 8000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-006', 'kd_rek' => '5103', 'arus_kas' => 0, 'debet' => 5000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-006', 'kd_rek' => '5201', 'arus_kas' => 0, 'debet' => 20000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-006', 'kd_rek' => '5301', 'arus_kas' => 0, 'debet' => 2000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-006', 'kd_rek' => '1101', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 45000000],
+            ['no_jurnal' => 'JU-2025-007', 'kd_rek' => '1101', 'arus_kas' => 0, 'debet' => 95000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-007', 'kd_rek' => '4101', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 35000000], ['no_jurnal' => 'JU-2025-007', 'kd_rek' => '4102', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 30000000], ['no_jurnal' => 'JU-2025-007', 'kd_rek' => '4103', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 18000000], ['no_jurnal' => 'JU-2025-007', 'kd_rek' => '4104', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 7000000], ['no_jurnal' => 'JU-2025-007', 'kd_rek' => '4105', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 5000000],
+            ['no_jurnal' => 'JU-2025-008', 'kd_rek' => '5101', 'arus_kas' => 0, 'debet' => 10000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-008', 'kd_rek' => '5102', 'arus_kas' => 0, 'debet' => 8000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-008', 'kd_rek' => '5103', 'arus_kas' => 0, 'debet' => 5000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-008', 'kd_rek' => '5201', 'arus_kas' => 0, 'debet' => 22000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-008', 'kd_rek' => '5301', 'arus_kas' => 0, 'debet' => 2000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-008', 'kd_rek' => '1101', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 47000000],
+            ['no_jurnal' => 'JU-2025-009', 'kd_rek' => '5401', 'arus_kas' => 0, 'debet' => 15000000, 'kredit' => 0], ['no_jurnal' => 'JU-2025-009', 'kd_rek' => '1601', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 5000000], ['no_jurnal' => 'JU-2025-009', 'kd_rek' => '1701', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 7000000], ['no_jurnal' => 'JU-2025-009', 'kd_rek' => '1801', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 3000000],
+            ['no_jurnal' => 'JU-2026-001', 'kd_rek' => '1101', 'arus_kas' => 0, 'debet' => 80000000, 'kredit' => 0], ['no_jurnal' => 'JU-2026-001', 'kd_rek' => '4101', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 30000000], ['no_jurnal' => 'JU-2026-001', 'kd_rek' => '4102', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 25000000], ['no_jurnal' => 'JU-2026-001', 'kd_rek' => '4103', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 15000000], ['no_jurnal' => 'JU-2026-001', 'kd_rek' => '4104', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 5000000], ['no_jurnal' => 'JU-2026-001', 'kd_rek' => '4105', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 5000000],
+            ['no_jurnal' => 'JU-2026-002', 'kd_rek' => '5101', 'arus_kas' => 0, 'debet' => 10000000, 'kredit' => 0], ['no_jurnal' => 'JU-2026-002', 'kd_rek' => '5102', 'arus_kas' => 0, 'debet' => 8000000, 'kredit' => 0], ['no_jurnal' => 'JU-2026-002', 'kd_rek' => '5103', 'arus_kas' => 0, 'debet' => 5000000, 'kredit' => 0], ['no_jurnal' => 'JU-2026-002', 'kd_rek' => '5201', 'arus_kas' => 0, 'debet' => 20000000, 'kredit' => 0], ['no_jurnal' => 'JU-2026-002', 'kd_rek' => '5301', 'arus_kas' => 0, 'debet' => 2500000, 'kredit' => 0], ['no_jurnal' => 'JU-2026-002', 'kd_rek' => '1101', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 45500000],
+            ['no_jurnal' => 'JU-2026-003', 'kd_rek' => '1101', 'arus_kas' => 0, 'debet' => 75000000, 'kredit' => 0], ['no_jurnal' => 'JU-2026-003', 'kd_rek' => '4101', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 28000000], ['no_jurnal' => 'JU-2026-003', 'kd_rek' => '4102', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 22000000], ['no_jurnal' => 'JU-2026-003', 'kd_rek' => '4103', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 14000000], ['no_jurnal' => 'JU-2026-003', 'kd_rek' => '4104', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 6000000], ['no_jurnal' => 'JU-2026-003', 'kd_rek' => '4105', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 5000000],
+            ['no_jurnal' => 'JU-2026-004', 'kd_rek' => '5101', 'arus_kas' => 0, 'debet' => 10000000, 'kredit' => 0], ['no_jurnal' => 'JU-2026-004', 'kd_rek' => '5102', 'arus_kas' => 0, 'debet' => 8000000, 'kredit' => 0], ['no_jurnal' => 'JU-2026-004', 'kd_rek' => '5103', 'arus_kas' => 0, 'debet' => 5000000, 'kredit' => 0], ['no_jurnal' => 'JU-2026-004', 'kd_rek' => '5201', 'arus_kas' => 0, 'debet' => 18000000, 'kredit' => 0], ['no_jurnal' => 'JU-2026-004', 'kd_rek' => '5302', 'arus_kas' => 0, 'debet' => 600000, 'kredit' => 0], ['no_jurnal' => 'JU-2026-004', 'kd_rek' => '1101', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 41600000],
+            ['no_jurnal' => 'JU-2026-005', 'kd_rek' => '1101', 'arus_kas' => 0, 'debet' => 85000000, 'kredit' => 0], ['no_jurnal' => 'JU-2026-005', 'kd_rek' => '4101', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 32000000], ['no_jurnal' => 'JU-2026-005', 'kd_rek' => '4102', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 27000000], ['no_jurnal' => 'JU-2026-005', 'kd_rek' => '4103', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 16000000], ['no_jurnal' => 'JU-2026-005', 'kd_rek' => '4104', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 5000000], ['no_jurnal' => 'JU-2026-005', 'kd_rek' => '4105', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 5000000],
+            ['no_jurnal' => 'JU-2026-006', 'kd_rek' => '5101', 'arus_kas' => 0, 'debet' => 10000000, 'kredit' => 0], ['no_jurnal' => 'JU-2026-006', 'kd_rek' => '5102', 'arus_kas' => 0, 'debet' => 8000000, 'kredit' => 0], ['no_jurnal' => 'JU-2026-006', 'kd_rek' => '5103', 'arus_kas' => 0, 'debet' => 5000000, 'kredit' => 0], ['no_jurnal' => 'JU-2026-006', 'kd_rek' => '5201', 'arus_kas' => 0, 'debet' => 22000000, 'kredit' => 0], ['no_jurnal' => 'JU-2026-006', 'kd_rek' => '5301', 'arus_kas' => 0, 'debet' => 2500000, 'kredit' => 0], ['no_jurnal' => 'JU-2026-006', 'kd_rek' => '5302', 'arus_kas' => 0, 'debet' => 600000, 'kredit' => 0], ['no_jurnal' => 'JU-2026-006', 'kd_rek' => '1101', 'arus_kas' => 0, 'debet' => 0, 'kredit' => 48100000]
+        ];
+
+        $defaultRekening = [
+            '1101' => ['kd_rek' => '1101', 'nm_rek' => 'Kas Umum', 'tipe' => 'N', 'balance' => 'D', 'level' => '1'],
+            '1102' => ['kd_rek' => '1102', 'nm_rek' => 'Kas Kasir Rawat Jalan', 'tipe' => 'N', 'balance' => 'D', 'level' => '1'],
+            '1103' => ['kd_rek' => '1103', 'nm_rek' => 'Kas Kasir Rawat Inap', 'tipe' => 'N', 'balance' => 'D', 'level' => '1'],
+            '1104' => ['kd_rek' => '1104', 'nm_rek' => 'Kas Farmasi', 'tipe' => 'N', 'balance' => 'D', 'level' => '1'],
+            '1105' => ['kd_rek' => '1105', 'nm_rek' => 'Kas Kecil', 'tipe' => 'N', 'balance' => 'D', 'level' => '1'],
+            '1201' => ['kd_rek' => '1201', 'nm_rek' => 'Bank BRI', 'tipe' => 'N', 'balance' => 'D', 'level' => '1'],
+            '1301' => ['kd_rek' => '1301', 'nm_rek' => 'Piutang BPJS', 'tipe' => 'N', 'balance' => 'D', 'level' => '1'],
+            '1302' => ['kd_rek' => '1302', 'nm_rek' => 'Piutang Pasien Umum', 'tipe' => 'N', 'balance' => 'D', 'level' => '1'],
+            '1401' => ['kd_rek' => '1401', 'nm_rek' => 'Persediaan Obat & BHP', 'tipe' => 'N', 'balance' => 'D', 'level' => '1'],
+            '1601' => ['kd_rek' => '1601', 'nm_rek' => 'Gedung & Bangunan', 'tipe' => 'N', 'balance' => 'D', 'level' => '1'],
+            '1701' => ['kd_rek' => '1701', 'nm_rek' => 'Peralatan Medis', 'tipe' => 'N', 'balance' => 'D', 'level' => '1'],
+            '1801' => ['kd_rek' => '1801', 'nm_rek' => 'Kendaraan', 'tipe' => 'N', 'balance' => 'D', 'level' => '1'],
+            '1901' => ['kd_rek' => '1901', 'nm_rek' => 'Inventaris Kantor', 'tipe' => 'N', 'balance' => 'D', 'level' => '1'],
+            '2101' => ['kd_rek' => '2101', 'nm_rek' => 'Hutang Usaha', 'tipe' => 'N', 'balance' => 'K', 'level' => '1'],
+            '2102' => ['kd_rek' => '2102', 'nm_rek' => 'Hutang Gaji', 'tipe' => 'N', 'balance' => 'K', 'level' => '1'],
+            '2201' => ['kd_rek' => '2201', 'nm_rek' => 'Hutang Bank', 'tipe' => 'N', 'balance' => 'K', 'level' => '1'],
+            '3101' => ['kd_rek' => '3101', 'nm_rek' => 'Modal Disetor', 'tipe' => 'M', 'balance' => 'K', 'level' => '1'],
+            '3201' => ['kd_rek' => '3201', 'nm_rek' => 'Laba Ditahan', 'tipe' => 'M', 'balance' => 'K', 'level' => '1'],
+            '4101' => ['kd_rek' => '4101', 'nm_rek' => 'Pendapatan Rawat Jalan', 'tipe' => 'R', 'balance' => 'K', 'level' => '1'],
+            '4102' => ['kd_rek' => '4102', 'nm_rek' => 'Pendapatan Rawat Inap', 'tipe' => 'R', 'balance' => 'K', 'level' => '1'],
+            '4103' => ['kd_rek' => '4103', 'nm_rek' => 'Pendapatan Obat & BHP', 'tipe' => 'R', 'balance' => 'K', 'level' => '1'],
+            '4104' => ['kd_rek' => '4104', 'nm_rek' => 'Pendapatan Laboratorium', 'tipe' => 'R', 'balance' => 'K', 'level' => '1'],
+            '4105' => ['kd_rek' => '4105', 'nm_rek' => 'Pendapatan Radiologi', 'tipe' => 'R', 'balance' => 'K', 'level' => '1'],
+            '4201' => ['kd_rek' => '4201', 'nm_rek' => 'Pendapatan Lain-lain', 'tipe' => 'R', 'balance' => 'K', 'level' => '1'],
+            '5101' => ['kd_rek' => '5101', 'nm_rek' => 'Beban Gaji Dokter', 'tipe' => 'R', 'balance' => 'D', 'level' => '1'],
+            '5102' => ['kd_rek' => '5102', 'nm_rek' => 'Beban Gaji Paramedis', 'tipe' => 'R', 'balance' => 'D', 'level' => '1'],
+            '5103' => ['kd_rek' => '5103', 'nm_rek' => 'Beban Gaji Karyawan', 'tipe' => 'R', 'balance' => 'D', 'level' => '1'],
+            '5201' => ['kd_rek' => '5201', 'nm_rek' => 'Beban Obat & BHP', 'tipe' => 'R', 'balance' => 'D', 'level' => '1'],
+            '5301' => ['kd_rek' => '5301', 'nm_rek' => 'Beban Listrik', 'tipe' => 'R', 'balance' => 'D', 'level' => '1'],
+            '5302' => ['kd_rek' => '5302', 'nm_rek' => 'Beban Air & Kebersihan', 'tipe' => 'R', 'balance' => 'D', 'level' => '1'],
+            '5401' => ['kd_rek' => '5401', 'nm_rek' => 'Beban Penyusutan', 'tipe' => 'R', 'balance' => 'D', 'level' => '1'],
+            '5501' => ['kd_rek' => '5501', 'nm_rek' => 'Beban Administrasi Umum', 'tipe' => 'R', 'balance' => 'D', 'level' => '1']
+        ];
+
+        $requiredRekening = [];
+        foreach ($rekeningtahun as $item) {
+            $requiredRekening[$item['kd_rek']] = true;
+        }
+        foreach ($detailjurnal as $item) {
+            $requiredRekening[$item['kd_rek']] = true;
+        }
+
+        $missingRekening = [];
+        $rekeningToInsert = [];
+        foreach (array_keys($requiredRekening) as $kd_rek) {
+            $rekening = $this->db('mlite_rekening')->where('kd_rek', $kd_rek)->oneArray();
+            if (empty($rekening)) {
+                if (isset($defaultRekening[$kd_rek])) {
+                    $rekeningToInsert[$kd_rek] = $defaultRekening[$kd_rek];
+                } else {
+                    $missingRekening[] = $kd_rek;
+                }
+            }
+        }
+
+        if (!empty($missingRekening)) {
+            $this->notify('failure', 'Insert data dummy gagal. Akun rekening tidak ditemukan: '.implode(', ', $missingRekening));
+            redirect(url([ADMIN, 'keuangan', 'settings']));
+            return;
+        }
+
+        $this->db()->pdo()->beginTransaction();
+
+        try {
+            foreach ($rekeningToInsert as $item) {
+                $exists = $this->db('mlite_rekening')->where('kd_rek', $item['kd_rek'])->oneArray();
+                if (empty($exists)) {
+                    $this->db('mlite_rekening')->save($item);
+                }
+            }
+
+            $insertedRekeningTahun = 0;
+            foreach ($rekeningtahun as $item) {
+                $exists = $this->db('mlite_rekeningtahun')->where('thn', $item['thn'])->where('kd_rek', $item['kd_rek'])->oneArray();
+                if (empty($exists)) {
+                    $this->db('mlite_rekeningtahun')->save($item);
+                    $insertedRekeningTahun++;
+                }
+            }
+
+            $insertedJurnal = 0;
+            foreach ($jurnal as $item) {
+                $exists = $this->db('mlite_jurnal')->where('no_jurnal', $item['no_jurnal'])->oneArray();
+                if (empty($exists)) {
+                    $this->db('mlite_jurnal')->save($item);
+                    $insertedJurnal++;
+                }
+            }
+
+            $insertedDetail = 0;
+            foreach ($detailjurnal as $item) {
+                $exists = $this->db('mlite_detailjurnal')
+                    ->where('no_jurnal', $item['no_jurnal'])
+                    ->where('kd_rek', $item['kd_rek'])
+                    ->where('arus_kas', $item['arus_kas'])
+                    ->where('debet', $item['debet'])
+                    ->where('kredit', $item['kredit'])
+                    ->oneArray();
+                if (empty($exists)) {
+                    $this->db('mlite_detailjurnal')->save($item);
+                    $insertedDetail++;
+                }
+            }
+
+            $this->db()->pdo()->commit();
+            $this->notify('success', 'Data dummy keuangan diproses. Insert baru: rekening tahun '.$insertedRekeningTahun.', jurnal '.$insertedJurnal.', detail jurnal '.$insertedDetail.'.');
+        } catch (\Exception $e) {
+            $this->db()->pdo()->rollBack();
+            $this->notify('failure', 'Insert data dummy keuangan gagal: '.$e->getMessage());
+        }
+
+        redirect(url([ADMIN, 'keuangan', 'settings']));
+    }
+
 
     public function postSaveAkunKegiatan()
     {
-        if($_POST['simpan']) {
+        if(isset($_POST['simpan']) && $_POST['simpan']) {
           $this->db('mlite_akun_kegiatan')
           ->save([
             'kegiatan' => $_POST['nama_kegiatan'],
             'kd_rek' => $_POST['kd_rek']
           ]);
           $this->notify('success', 'Nama kegiatan keuangan telah disimpan');
-        } else if ($_POST['update']) {
+        } else if (isset($_POST['update']) && $_POST['update']) {
           $this->db('mlite_akun_kegiatan')
           ->where('id', $_POST['id'])
           ->save([
             'kegiatan' => $_POST['nama_kegiatan'],
             'kd_rek' => $_POST['kd_rek']
           ]);
-          $this->notify('failure', 'Nama kegiatan keuangan telah diubah');
-        } else if ($_POST['hapus']) {
+          $this->notify('success', 'Nama kegiatan keuangan telah diubah');
+        } else if (isset($_POST['hapus']) && $_POST['hapus']) {
           $this->db('mlite_akun_kegiatan')
           ->where('id', $_POST['id'])
           ->delete();
-          $this->notify('failure', 'Nama kegiatan keuangan telah dihapus');
+          $this->notify('success', 'Nama kegiatan keuangan telah dihapus');
         }
         redirect(url([ADMIN, 'keuangan', 'pengaturanrekening']));
     }
 
     public function postSaveSettingsRekening()
     {
+        if ($this->core->getUserInfo('role') != 'admin') {
+            $this->notify('failure', 'Anda tidak memiliki hak akses untuk halaman ini.');
+            redirect(url([ADMIN, 'keuangan', 'manage']));
+        }
         foreach ($_POST['kegiatan'] as $key => $val) {
             $this->db('mlite_akun_kegiatan')
             ->where('id', $key)
@@ -661,8 +884,7 @@ class Admin extends AdminModule
               'kd_rek' => $val
             ]);
         }
-        $this->notify('success', 'Pengaturan rekeing keuangan telah disimpan');
-        //exit();
+        $this->notify('success', 'Pengaturan rekening keuangan telah disimpan');
         redirect(url([ADMIN, 'keuangan', 'pengaturanrekening']));
     }
 

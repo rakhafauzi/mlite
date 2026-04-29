@@ -1712,12 +1712,305 @@ switch ($version) {
         break;
 
     case '6.0.0':
-        $return = '6.2.0'; 
+        $return = '6.2.0';
+        break;
+
+    case '6.2.0':
+        if (defined('DBDRIVER') && DBDRIVER == 'sqlite') {
+            // Kapabilitas SQLite sejak 6.2.0
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_mini_pacs_study` (
+              `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+              `no_rawat` TEXT DEFAULT NULL,
+              `study_instance_uid` TEXT NOT NULL,
+              `study_date` TEXT DEFAULT NULL,
+              `modality` TEXT DEFAULT NULL,
+              `description` TEXT DEFAULT NULL
+            );");
+            $this->core->db()->pdo()->exec("CREATE INDEX IF NOT EXISTS idx_pacs_study_uid ON `mlite_mini_pacs_study` (`study_instance_uid`);");
+            $this->core->db()->pdo()->exec("CREATE INDEX IF NOT EXISTS idx_pacs_study_rawat ON `mlite_mini_pacs_study` (`no_rawat`);");
+
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_mini_pacs_series` (
+              `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+              `study_id` INTEGER NOT NULL,
+              `series_instance_uid` TEXT NOT NULL,
+              `series_description` TEXT DEFAULT NULL,
+              FOREIGN KEY (`study_id`) REFERENCES `mlite_mini_pacs_study` (`id`) ON DELETE CASCADE
+            );");
+            $this->core->db()->pdo()->exec("CREATE INDEX IF NOT EXISTS idx_pacs_series_uid ON `mlite_mini_pacs_series` (`series_instance_uid`);");
+            $this->core->db()->pdo()->exec("CREATE INDEX IF NOT EXISTS idx_pacs_series_study ON `mlite_mini_pacs_series` (`study_id`);");
+
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_mini_pacs_instance` (
+              `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+              `series_id` INTEGER NOT NULL,
+              `sop_instance_uid` TEXT NOT NULL,
+              `file_path` TEXT NOT NULL,
+              FOREIGN KEY (`series_id`) REFERENCES `mlite_mini_pacs_series` (`id`) ON DELETE CASCADE
+            );");
+            $this->core->db()->pdo()->exec("CREATE INDEX IF NOT EXISTS idx_pacs_inst_uid ON `mlite_mini_pacs_instance` (`sop_instance_uid`);");
+            $this->core->db()->pdo()->exec("CREATE INDEX IF NOT EXISTS idx_pacs_inst_series ON `mlite_mini_pacs_instance` (`series_id`);");
+
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_mini_pacs_instance_metadata` (
+              `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+              `instance_id` INTEGER NOT NULL,
+              `tag` TEXT NOT NULL,
+              `name` TEXT DEFAULT NULL,
+              `value` TEXT,
+              FOREIGN KEY (`instance_id`) REFERENCES `mlite_mini_pacs_instance` (`id`) ON DELETE CASCADE
+            );");
+            $this->core->db()->pdo()->exec("CREATE INDEX IF NOT EXISTS idx_pacs_meta_tag ON `mlite_mini_pacs_instance_metadata` (`tag`);");
+            $this->core->db()->pdo()->exec("CREATE INDEX IF NOT EXISTS idx_pacs_meta_inst ON `mlite_mini_pacs_instance_metadata` (`instance_id`);");
+
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_mini_pacs_worklist_status` (
+              `noorder` TEXT PRIMARY KEY,
+              `pulled_at` DATETIME DEFAULT NULL,
+              `notified` INTEGER DEFAULT 0
+            );");
+
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_farmasi_pengajuan_obat` (
+              `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+              `no_pengajuan` TEXT NOT NULL,
+              `tanggal_pengajuan` TEXT NOT NULL,
+              `kode_brng` TEXT NOT NULL,
+              `jumlah` INTEGER NOT NULL DEFAULT 0,
+              `status` TEXT NOT NULL DEFAULT 'Menunggu',
+              `catatan` TEXT,
+              `dibuat_oleh` TEXT DEFAULT '-',
+              `disetujui_oleh` TEXT DEFAULT NULL,
+              `disetujui_at` TEXT DEFAULT NULL,
+              `created_at` TEXT NOT NULL
+            );");
+            $this->core->db()->pdo()->exec("CREATE INDEX IF NOT EXISTS idx_farmasi_pengajuan_no ON `mlite_farmasi_pengajuan_obat` (`no_pengajuan`);");
+
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_farmasi_pemesanan_obat` (
+              `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+              `no_pemesanan` TEXT NOT NULL,
+              `no_pengajuan` TEXT NOT NULL,
+              `pengajuan_id` INTEGER NOT NULL,
+              `kode_brng` TEXT NOT NULL,
+              `tanggal_pemesanan` TEXT NOT NULL,
+              `supplier_kode` TEXT,
+              `supplier` TEXT NOT NULL,
+              `jumlah_pengajuan` INTEGER NOT NULL DEFAULT 0,
+              `jumlah_pesan` INTEGER NOT NULL DEFAULT 0,
+              `status_pemesanan` TEXT NOT NULL DEFAULT 'Draft',
+              `catatan` TEXT,
+              `dibuat_oleh` TEXT DEFAULT '-',
+              `created_at` TEXT NOT NULL
+            );");
+            $this->core->db()->pdo()->exec("CREATE INDEX IF NOT EXISTS idx_farmasi_pemesanan_no ON `mlite_farmasi_pemesanan_obat` (`no_pemesanan`);");
+            $this->core->db()->pdo()->exec("CREATE INDEX IF NOT EXISTS idx_farmasi_pemesanan_pengajuan ON `mlite_farmasi_pemesanan_obat` (`no_pengajuan`);");
+            $this->core->db()->pdo()->exec("CREATE INDEX IF NOT EXISTS idx_farmasi_pemesanan_pengajuan_id ON `mlite_farmasi_pemesanan_obat` (`pengajuan_id`);");
+
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_farmasi_penerimaan_obat` (
+              `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+              `pemesanan_id` INTEGER NOT NULL,
+              `tanggal_penerimaan` TEXT NOT NULL,
+              `jumlah_terima` INTEGER NOT NULL DEFAULT 0,
+              `jenis_pembayaran` TEXT NOT NULL DEFAULT 'Cash',
+              `tanggal_jatuh_tempo` TEXT DEFAULT NULL,
+              `nomor_faktur` TEXT DEFAULT NULL,
+              `catatan` TEXT,
+              `dibuat_oleh` TEXT DEFAULT '-',
+              `created_at` TEXT NOT NULL
+            );");
+            $this->core->db()->pdo()->exec("CREATE INDEX IF NOT EXISTS idx_farmasi_penerimaan_pemesanan ON `mlite_farmasi_penerimaan_obat` (`pemesanan_id`);");
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_bpjs_emr_mapping_prosedur_ranap` (
+              `kd_jenis_prw` TEXT NOT NULL,
+              `snomed_code` TEXT NOT NULL,
+              `snomed_display` TEXT DEFAULT NULL,
+              `focal_device_code` TEXT DEFAULT NULL,
+              `focal_device_display` TEXT DEFAULT NULL,
+              PRIMARY KEY (`kd_jenis_prw`)
+            );");
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_bpjs_emr_mapping_operasi` (
+              `kode_paket` TEXT NOT NULL,
+              `snomed_code` TEXT NOT NULL,
+              `snomed_display` TEXT DEFAULT NULL,
+              `focal_device_code` TEXT DEFAULT NULL,
+              `focal_device_display` TEXT DEFAULT NULL,
+              PRIMARY KEY (`kode_paket`)
+            );");
+            try { $this->core->db()->pdo()->exec("ALTER TABLE `mlite_bpjs_emr_mapping_prosedur` ADD COLUMN `focal_device_code` TEXT DEFAULT NULL"); } catch (\Throwable $e) {}
+            try { $this->core->db()->pdo()->exec("ALTER TABLE `mlite_bpjs_emr_mapping_prosedur` ADD COLUMN `focal_device_display` TEXT DEFAULT NULL"); } catch (\Throwable $e) {}
+            try { $this->core->db()->pdo()->exec("ALTER TABLE `mlite_bpjs_emr_mapping_prosedur_ranap` ADD COLUMN `focal_device_code` TEXT DEFAULT NULL"); } catch (\Throwable $e) {}
+            try { $this->core->db()->pdo()->exec("ALTER TABLE `mlite_bpjs_emr_mapping_prosedur_ranap` ADD COLUMN `focal_device_display` TEXT DEFAULT NULL"); } catch (\Throwable $e) {}
+            try { $this->core->db()->pdo()->exec("ALTER TABLE `mlite_bpjs_emr_mapping_operasi` ADD COLUMN `focal_device_code` TEXT DEFAULT NULL"); } catch (\Throwable $e) {}
+            try { $this->core->db()->pdo()->exec("ALTER TABLE `mlite_bpjs_emr_mapping_operasi` ADD COLUMN `focal_device_display` TEXT DEFAULT NULL"); } catch (\Throwable $e) {}
+            try { $this->core->db()->pdo()->exec("ALTER TABLE `mlite_satu_sehat_response` AFTER `id_rad_diagnostic` ADD COLUMN `id_imaging_study` varchar(50) DEFAULT NULL"); } catch (\Throwable $e) {}
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_mapping_snomed_icd` (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                no_rawat TEXT NOT NULL,
+                kd_penyakit TEXT NOT NULL,
+                snomed_concept_id INTEGER NOT NULL,
+                snomed_term TEXT NOT NULL,
+                status_penyakit TEXT DEFAULT 'Baru' CHECK(status_penyakit IN ('Baru','Lama')),
+                UNIQUE (no_rawat, kd_penyakit, snomed_concept_id)
+            );");
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_mapping_snomed_icd9` (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                no_rawat TEXT NOT NULL,
+                kd_tindakan TEXT NOT NULL,
+                snomed_concept_id TEXT NOT NULL,
+                snomed_term TEXT DEFAULT NULL,
+                UNIQUE (no_rawat, kd_tindakan, snomed_concept_id)
+            );");
+            $this->core->db()->pdo()->exec("CREATE INDEX IF NOT EXISTS idx_mapping_snomed_icd9_no_rawat ON `mlite_mapping_snomed_icd9` (`no_rawat`);");
+            $this->core->db()->pdo()->exec("CREATE INDEX IF NOT EXISTS idx_mapping_snomed_icd9_kd_tindakan ON `mlite_mapping_snomed_icd9` (`kd_tindakan`);");
+            $this->core->db()->pdo()->exec("CREATE INDEX IF NOT EXISTS idx_mapping_snomed_icd9_concept_id ON `mlite_mapping_snomed_icd9` (`snomed_concept_id`);");
+        } else {
+            // Kapabilitas MySQL sejak 6.2.0
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_mini_pacs_study` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `no_rawat` varchar(20) DEFAULT NULL,
+              `study_instance_uid` varchar(100) NOT NULL,
+              `study_date` datetime DEFAULT NULL,
+              `modality` varchar(20) DEFAULT NULL,
+              `description` varchar(255) DEFAULT NULL,
+              PRIMARY KEY (`id`),
+              KEY `idx_study_uid` (`study_instance_uid`),
+              KEY `idx_no_rawat` (`no_rawat`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_mini_pacs_series` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `study_id` int(11) NOT NULL,
+              `series_instance_uid` varchar(100) NOT NULL,
+              `series_description` varchar(255) DEFAULT NULL,
+              PRIMARY KEY (`id`),
+              KEY `idx_series_uid` (`series_instance_uid`),
+              KEY `idx_study_id` (`study_id`),
+              CONSTRAINT `fk_pacs_study` FOREIGN KEY (`study_id`) REFERENCES `mlite_mini_pacs_study` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_mini_pacs_instance` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `series_id` int(11) NOT NULL,
+              `sop_instance_uid` varchar(100) NOT NULL,
+              `file_path` text NOT NULL,
+              PRIMARY KEY (`id`),
+              KEY `idx_sop_uid` (`sop_instance_uid`),
+              KEY `idx_series_id` (`series_id`),
+              CONSTRAINT `fk_pacs_series` FOREIGN KEY (`series_id`) REFERENCES `mlite_mini_pacs_series` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_mini_pacs_instance_metadata` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `instance_id` int(11) NOT NULL,
+              `tag` varchar(20) NOT NULL,
+              `name` varchar(255) DEFAULT NULL,
+              `value` text,
+              PRIMARY KEY (`id`),
+              KEY `idx_instance_id` (`instance_id`),
+              KEY `idx_tag` (`tag`),
+              CONSTRAINT `fk_pacs_instance_metadata` FOREIGN KEY (`instance_id`) REFERENCES `mlite_mini_pacs_instance` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_mini_pacs_worklist_status` (
+              `noorder` varchar(20) NOT NULL,
+              `pulled_at` datetime DEFAULT NULL,
+              `notified` tinyint(1) DEFAULT 0,
+              PRIMARY KEY (`noorder`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;");
+
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_farmasi_pengajuan_obat` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `no_pengajuan` varchar(30) NOT NULL,
+              `tanggal_pengajuan` date NOT NULL,
+              `kode_brng` varchar(15) NOT NULL,
+              `jumlah` int(11) NOT NULL DEFAULT 0,
+              `status` varchar(20) NOT NULL DEFAULT 'Menunggu',
+              `catatan` text,
+              `dibuat_oleh` varchar(100) DEFAULT '-',
+              `disetujui_oleh` varchar(100) DEFAULT NULL,
+              `disetujui_at` datetime DEFAULT NULL,
+              `created_at` datetime NOT NULL,
+              PRIMARY KEY (`id`),
+              KEY `idx_no_pengajuan` (`no_pengajuan`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;");
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_farmasi_pemesanan_obat` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `no_pemesanan` varchar(30) NOT NULL,
+              `no_pengajuan` varchar(30) NOT NULL,
+              `pengajuan_id` int(11) NOT NULL,
+              `kode_brng` varchar(15) NOT NULL,
+              `tanggal_pemesanan` date NOT NULL,
+              `supplier_kode` text,
+              `supplier` varchar(255) NOT NULL,
+              `jumlah_pengajuan` int(11) NOT NULL DEFAULT 0,
+              `jumlah_pesan` int(11) NOT NULL DEFAULT 0,
+              `status_pemesanan` varchar(20) NOT NULL DEFAULT 'Draft',
+              `catatan` text,
+              `dibuat_oleh` varchar(100) DEFAULT '-',
+              `created_at` datetime NOT NULL,
+              PRIMARY KEY (`id`),
+              KEY `idx_no_pemesanan` (`no_pemesanan`),
+              KEY `idx_no_pengajuan_pemesanan` (`no_pengajuan`),
+              KEY `idx_pengajuan_id` (`pengajuan_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;");
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_farmasi_penerimaan_obat` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `pemesanan_id` int(11) NOT NULL,
+              `tanggal_penerimaan` date NOT NULL,
+              `jumlah_terima` int(11) NOT NULL DEFAULT 0,
+              `jenis_pembayaran` varchar(10) NOT NULL DEFAULT 'Cash',
+              `tanggal_jatuh_tempo` date DEFAULT NULL,
+              `nomor_faktur` varchar(100) DEFAULT NULL,
+              `catatan` text,
+              `dibuat_oleh` varchar(100) DEFAULT '-',
+              `created_at` datetime NOT NULL,
+              PRIMARY KEY (`id`),
+              KEY `idx_pemesanan_id` (`pemesanan_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;");
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_bpjs_emr_mapping_prosedur_ranap` (
+              `kd_jenis_prw` varchar(20) NOT NULL,
+              `snomed_code` varchar(20) NOT NULL,
+              `snomed_display` varchar(255) DEFAULT NULL,
+              `focal_device_code` varchar(20) DEFAULT NULL,
+              `focal_device_display` varchar(255) DEFAULT NULL,
+              PRIMARY KEY (`kd_jenis_prw`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;");
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_bpjs_emr_mapping_operasi` (
+              `kode_paket` varchar(20) NOT NULL,
+              `snomed_code` varchar(20) NOT NULL,
+              `snomed_display` varchar(255) DEFAULT NULL,
+              `focal_device_code` varchar(20) DEFAULT NULL,
+              `focal_device_display` varchar(255) DEFAULT NULL,
+              PRIMARY KEY (`kode_paket`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;");
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_mapping_snomed_icd` (
+              `id` int NOT NULL AUTO_INCREMENT,
+              `no_rawat` varchar(20) NOT NULL,
+              `kd_penyakit` varchar(10) NOT NULL,
+              `snomed_concept_id` bigint NOT NULL,
+              `snomed_term` varchar(255) NOT NULL,
+              `status_penyakit` enum('Baru','Lama') DEFAULT 'Baru',
+              PRIMARY KEY (`id`),
+              UNIQUE KEY `uniq_mapping` (`no_rawat`,`kd_penyakit`,`snomed_concept_id`),
+              KEY `no_rawat` (`no_rawat`),
+              KEY `kd_penyakit` (`kd_penyakit`),
+              KEY `snomed_concept_id` (`snomed_concept_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;");
+            $this->core->db()->pdo()->exec("CREATE TABLE IF NOT EXISTS `mlite_mapping_snomed_icd9` (
+              `id` int NOT NULL AUTO_INCREMENT,
+              `no_rawat` varchar(17) NOT NULL,
+              `kd_tindakan` varchar(10) NOT NULL,
+              `snomed_concept_id` varchar(50) NOT NULL,
+              `snomed_term` text DEFAULT NULL,
+              PRIMARY KEY (`id`),
+              UNIQUE KEY `uniq_mapping` (`no_rawat`,`kd_tindakan`,`snomed_concept_id`),
+              KEY `no_rawat` (`no_rawat`),
+              KEY `kd_tindakan` (`kd_tindakan`),
+              KEY `snomed_concept_id` (`snomed_concept_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;");
+
+
+        }
+        $return = '6.3.0';
         break;
     }
 
     if (!isset($return) || !$return) {
-        $return = '6.2.0';
+        $return = '6.3.0';
     }
 
 return $return;

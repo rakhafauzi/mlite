@@ -239,6 +239,10 @@ public function postSigningQrERM()
 
     public function getSettings()
     {
+        if ($this->core->getUserInfo('role') != 'admin') {
+            $this->notify('failure', 'Anda tidak memiliki hak akses untuk halaman ini.');
+            redirect(url([ADMIN, 'sertisign', 'signingqr']));
+        }
         $settings = [];
         $settings['api_host'] = $this->settings('sertisign', 'api_host');
         $settings['api_key'] = $this->settings('sertisign', 'api_key');
@@ -248,6 +252,10 @@ public function postSigningQrERM()
 
     public function postSaveSettings()
     {
+        if ($this->core->getUserInfo('role') != 'admin') {
+            $this->notify('failure', 'Anda tidak memiliki hak akses untuk halaman ini.');
+            redirect(url([ADMIN, 'sertisign', 'signingqr']));
+        }
         foreach ($_POST as $field => $value) {
             $this->settings('sertisign', $field, $value);
         }

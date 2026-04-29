@@ -74,7 +74,7 @@ class Admin extends AdminModule
     {
         $this->getCssCard();
         $parsedown = new \Systems\Lib\Parsedown();
-        $readme_file = MODULES . '/jkn_mobile/Help.md';
+        $readme_file = MODULES . '/jkn_mobile/README.md';
         $readme =  $parsedown->text($this->tpl->noParse(file_get_contents($readme_file)));
         return $this->draw('wsbpjs.html', ['readme' => $readme]);
     }
@@ -120,6 +120,11 @@ class Admin extends AdminModule
         }
 
         $json = json_decode($output, true);
+
+        // Jika json tidak berbentuk array (gagal decode / response kosong) jadikan array kosong agar tidak error di htmlspecialchars_array
+        if (!is_array($json)) {
+            $json = [];
+        }
 
         if (isset($json['response']) && !is_array($json['response'])) {
              $stringDecrypt = stringDecrypt($key, $json['response']);
@@ -1192,6 +1197,10 @@ class Admin extends AdminModule
 
     public function getSettings()
     {
+        if ($this->core->getUserInfo('role') != 'admin') {
+            $this->notify('failure', 'Anda tidak memiliki hak akses untuk halaman ini.');
+            redirect(url([ADMIN, 'jkn_mobile', 'index']));
+        }
         $this->_addHeaderFiles();
         $this->assign['title'] = 'Pengaturan Modul JKN Mobile';
         $this->assign['propinsi'] = $this->db('propinsi')->where('kd_prop', $this->settings->get('jkn_mobile.kdprop'))->oneArray();
@@ -1212,6 +1221,10 @@ class Admin extends AdminModule
 
     public function postSaveSettings()
     {
+        if ($this->core->getUserInfo('role') != 'admin') {
+            $this->notify('failure', 'Anda tidak memiliki hak akses untuk halaman ini.');
+            redirect(url([ADMIN, 'jkn_mobile', 'index']));
+        }
         if (isset($_POST['jkn_mobile']['display']) && is_array($_POST['jkn_mobile']['display'])) {
             $_POST['jkn_mobile']['display'] = implode(',', $_POST['jkn_mobile']['display']);
         } else {

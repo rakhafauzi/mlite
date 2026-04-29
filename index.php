@@ -12,8 +12,8 @@ if (!defined('BASE_DIR')) {
 }
 require_once('config.php');
 
-if (DBDRIVER === 'sqlite' && (!file_exists(BASE_DIR . '/systems/data/mlite.sdb') || filesize(BASE_DIR . '/systems/data/mlite.sdb') === 0)) {
-    header('Location: /tools.php?action=migrate');
+if (!file_exists(BASE_DIR . '/.env')) {
+    header('Location: /install.php');
     exit;
 }
 
@@ -35,18 +35,31 @@ ob_start(base64_decode('XFN5c3RlbXNcTWFpbjo6dmVyaWZ5TGljZW5zZQ=='));
 try {
     $core = new Systems\Site();
 } catch (Throwable $e) {
-    if (DEV_MODE) {
-        throw $e;
-    } else {
-        error_log('mLITE Error: ' . $e->getMessage());
-        http_response_code(500);
-        // Clean error message for production
-        $message = $e->getMessage();
-        // Remove database name pattern `dbname`.
-        $message = preg_replace('/`[^`]+`\./', '', $message);
-        echo json_encode(['status' => 'error', 'message' => $message]);
+    error_log('mLITE Error: ' . $e->getMessage());
+    http_response_code(500);
+    $message = 'System Error. Please contact administrator.';
+    
+    // Auto-rescue untuk lingkungan PaaS (Papuyu/Docker) jika .env terbuat tapi database belum di-import
+    $errMsg = $e->getMessage();
+    if (strpos($errMsg, 'Base table or view not found') !== false || strpos($errMsg, 'no such table') !== false || strpos($errMsg, 'Unknown database') !== false) {
+        header('Location: /install.php');
         exit;
     }
+    
+    $response = ['status' => 'error', 'message' => $message];
+    
+    if (DEV_MODE) {
+        $devMessage = preg_replace('/`[^`]+`\./', '', $e->getMessage());
+        $response['message'] .= ' Detail: ' . $devMessage;
+        $response['debug'] = [
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => explode("\n", $e->getTraceAsString())
+        ];
+    }
+    
+    echo json_encode($response);
+    exit;
 }
 
 ob_end_flush();

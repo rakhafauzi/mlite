@@ -51,7 +51,7 @@
                         "login"
                     ]
                 },
-                "description": "Mendapatkan Token JWT. \n\nKeamanan Layer 1: API Key harus sesuai dengan Username yang digunakan."
+                "description": "Mendapatkan Token JWT untuk Frontend/Mobile App. \n\nKeamanan Layer 1: Aplikasi diverifikasi via X-Api-Key.\nKeamanan Layer 2: End-User diverifikasi via Username & Password di body.\n(API Key bebas digunakan untuk meloginkan End-User mana saja sesuai tabel mlite_users)."
             },
             "response": []
         },
@@ -228,7 +228,7 @@
                             }
                         ],
                         "url": {
-                            "raw": "{{baseUrl}}/admin/api/pasien/riwayatperawatan/{{no_rkm_medis}}?no_rawat={{no_rawat}}",
+                            "raw": "{{baseUrl}}/admin/api/pasien/riwayatperawatan/{{no_rkm_medis}}?no_rawat={{no_rawat}}&detail=false",
                             "host": [
                                 "{{baseUrl}}"
                             ],
@@ -243,6 +243,10 @@
                                 {
                                     "key": "no_rawat",
                                     "value": "{{no_rawat}}"
+                                },
+                                {
+                                    "key": "detail",
+                                    "value": "false"
                                 }
                             ]
                         }
@@ -1616,6 +1620,185 @@
                                 "api",
                                 "rawat_jalan",
                                 "deletelaporanoperasi"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Presensi",
+            "item": [
+                {
+                    "name": "List Presensi",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "X-Api-Key",
+                                "value": "{{apiKey}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/api/presensi/list",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "api",
+                                "presensi",
+                                "list"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Show Presensi",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "X-Api-Key",
+                                "value": "{{apiKey}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/api/presensi/show?tanggal={{tanggal}}",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "api",
+                                "presensi",
+                                "show"
+                            ],
+                            "query": [
+                                {
+                                    "key": "tanggal",
+                                    "value": "{{tanggal}}"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Clock In",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "X-Api-Key",
+                                "value": "{{apiKey}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"shift\": \"Pagi\",\n    \"photo\": \"\",\n    \"lat\": \"-6.200000\",\n    \"lng\": \"106.816666\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/api/presensi/create",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "api",
+                                "presensi",
+                                "create"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Clock Out",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "X-Api-Key",
+                                "value": "{{apiKey}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/api/presensi/update",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "api",
+                                "presensi",
+                                "update"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Delete Presensi",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "X-Api-Key",
+                                "value": "{{apiKey}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"jam_datang\": \"2023-01-01 08:00:00\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/api/presensi/delete",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "api",
+                                "presensi",
+                                "delete"
                             ]
                         }
                     }
@@ -4307,7 +4490,7 @@
                             }
                         ],
                         "url": {
-                            "raw": "{{baseUrl}}/admin/api/laboratorium/showdetail/{{no_rawat}}",
+                            "raw": "{{baseUrl}}/admin/api/laboratorium/showdetail/{{status}}/{{no_rawat}}/{{noorder}}",
                             "host": [
                                 "{{baseUrl}}"
                             ],
@@ -4316,7 +4499,9 @@
                                 "api",
                                 "laboratorium",
                                 "showdetail",
-                                "{{no_rawat}}"
+                                "{{status}}",
+                                "{{no_rawat}}",
+                                "{{noorder}}"
                             ]
                         }
                     },
@@ -4856,7 +5041,7 @@
                             }
                         ],
                         "url": {
-                            "raw": "{{baseUrl}}/admin/api/radiologi/showdetail/{{no_rawat}}",
+                            "raw": "{{baseUrl}}/admin/api/radiologi/showdetail/{{status}}/{{no_rawat}}/{{noorder}}",
                             "host": [
                                 "{{baseUrl}}"
                             ],
@@ -4865,7 +5050,9 @@
                                 "api",
                                 "radiologi",
                                 "showdetail",
-                                "{{no_rawat}}"
+                                "{{status}}",
+                                "{{no_rawat}}",
+                                "{{noorder}}"
                             ]
                         }
                     },
@@ -5503,6 +5690,7 @@
         },
         {
             "name": "Master",
+            "description": "\n\n#### Modul Master menyediakan akses generic ke berbagai tabel di database mLITE melalui satu set endpoint yang fleksibel.\n\n### Endpoint Generic\nSeluruh data master dapat diakses dengan mengganti `{table}` pada URL berikut:\n- **List Data (GET)**: `{{baseUrl}}/admin/api/master/list/{table}`\n- **Simpan Data (POST)**: `{{baseUrl}}/admin/api/master/save/{table}`\n- **Hapus Data (DELETE)**: `{{baseUrl}}/admin/api/master/delete/{table}`\n\n### Parameter Pencarian (GET)\n- `page`: Nomor halaman (default: 1)\n- `per_page`: Jumlah record per halaman (default: 10)\n- `s`: Kata kunci pencarian (string)\n- `col`: Nama kolom spesifik untuk pencarian (opsional)\n\n### Keamanan & Whitelist\nSistem secara otomatis mengizinkan akses ke tabel-tabel yang tersedia di database. Tabel sensitif seperti `mlite_api_key` telah diblokir untuk alasan keamanan. \n\nContoh `{table}` yang umum digunakan:\n- `dokter`, `petugas`, `poliklinik`, `bangsal`, `kamar`, `databarang` (Data Dasar)\n- `jns_perawatan`, `jns_perawatan_inap`, `jns_perawatan_lab`, `jns_perawatan_radiologi` (Layanan)\n- `bahasa`, `suku_bangsa`, `cacat_fisik`, `pendidikan` (Biodata)\n- `penyakit` (ICD-10), `icd9` (ICD-9)\n- `mlite_users`, `mlite_settings`, `mlite_modules` (Konfigurasi Sistem)",
             "item": [
                 {
                     "name": "List Master Data",
@@ -6755,6 +6943,106 @@
                         }
                     },
                     "response": []
+                }
+            ]
+        },
+        {
+            "name": "Mini PACS",
+            "item": [
+                {
+                    "name": "Study List",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "X-Api-Key",
+                                "value": "{{apiKey}}"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/api/mini_pacs/studylist?page=1&per_page=10&s="
+                        }
+                    }
+                },
+                {
+                    "name": "Study Detail",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "X-Api-Key",
+                                "value": "{{apiKey}}"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/api/mini_pacs/studydetail/{{study_id}}"
+                        }
+                    }
+                },
+                {
+                    "name": "Series Detail",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "X-Api-Key",
+                                "value": "{{apiKey}}"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/api/mini_pacs/seriesdetail/{{series_id}}"
+                        }
+                    }
+                },
+                {
+                    "name": "Download DICOM",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "X-Api-Key",
+                                "value": "{{apiKey}}"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/api/mini_pacs/instancedicom/{{instance_id}}"
+                        }
+                    }
+                },
+                {
+                    "name": "Get Thumbnail",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "X-Api-Key",
+                                "value": "{{apiKey}}"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{baseUrl}}/admin/api/mini_pacs/instancejpg/{{instance_id}}"
+                        }
+                    }
                 }
             ]
         }

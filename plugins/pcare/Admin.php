@@ -55,20 +55,24 @@ class Admin extends AdminModule
           'Status Pulang' => 'refstatuspulang',
           'Kelompok' => 'refkelompok',
           'Spesialis' => 'refspesialis',
-          'Settings' => 'settings'
+          'Pengaturan' => 'settings',
       ];
   }
 
   public function getManage()
   {
       $parsedown = new \Systems\Lib\Parsedown();
-      $readme_file = MODULES.'/pcare/Help.md';
+      $readme_file = MODULES.'/pcare/README.md';
       $readme =  $parsedown->text($this->tpl->noParse(file_get_contents($readme_file)));
       return $this->draw('manage.html', ['readme' => $readme]);
   }
 
   public function getSettings()
   {
+      if ($this->core->getUserInfo('role') != 'admin') {
+          $this->notify('failure', 'Anda tidak memiliki hak akses untuk halaman ini.');
+          redirect(url([ADMIN, 'pcare', 'manage']));
+      }
       $this->_addHeaderFiles();
       $this->assign['title'] = 'Pengaturan PCare';
       
@@ -104,6 +108,10 @@ class Admin extends AdminModule
 
   public function postSaveSettings()
   {
+      if ($this->core->getUserInfo('role') != 'admin') {
+          $this->notify('failure', 'Anda tidak memiliki hak akses untuk halaman ini.');
+          redirect(url([ADMIN, 'pcare', 'manage']));
+      }
       foreach ($_POST['pcare'] as $key => $val) {
           $this->settings('pcare', $key, $val);
       }

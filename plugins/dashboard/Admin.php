@@ -362,7 +362,7 @@ class Admin extends AdminModule
   {
     $files = [
       'info'      => MODULES . '/' . $dir . '/Info.php',
-      'help'    => MODULES . '/' . $dir . '/Help.md'
+      'help'      => MODULES . '/' . $dir . '/README.md'
     ];
 
     $module = $this->core->getModuleInfo($dir);

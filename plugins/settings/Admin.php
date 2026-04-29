@@ -42,6 +42,11 @@ class Admin extends AdminModule
 
     public function getGeneral()
     {
+        if ($this->core->getUserInfo('role') != 'admin') {
+            $this->notify('failure', 'Anda tidak memiliki hak akses untuk halaman ini.');
+            redirect(url([ADMIN, 'settings', 'manage']));
+        }
+
         $this->_addHeaderFiles();
         $settings = $this->settings('settings');
         $settings['module_pasien'] = $this->db('mlite_modules')->where('dir', 'pasien')->oneArray();
@@ -124,6 +129,27 @@ class Admin extends AdminModule
     public function postSaveGeneral()
     {
         unset($_POST['save']);
+
+        if (!empty($_POST['_b64'])) {
+            unset($_POST['_b64']);
+            $encodedFields = [];
+            if (!empty($_POST['_b64_fields'])) {
+                $decodedFields = json_decode($_POST['_b64_fields'], true);
+                if (is_array($decodedFields)) {
+                    $encodedFields = $decodedFields;
+                }
+            }
+            unset($_POST['_b64_fields']);
+            foreach ($encodedFields as $field) {
+                if (isset($_POST[$field]) && is_string($_POST[$field])) {
+                    $decoded = base64_decode($_POST[$field], true);
+                    if ($decoded !== false) {
+                        $_POST[$field] = $decoded;
+                    }
+                }
+            }
+        }
+
         if (($_logo = isset_or($_FILES['logo']['tmp_name'], false))) {
             $img = new \Systems\Lib\Image;
 
@@ -184,7 +210,14 @@ class Admin extends AdminModule
                 curl_setopt($curlHandle, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
                 curl_setopt($curlHandle, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTPS);
                 curl_setopt($curlHandle, CURLOPT_FOLLOWLOCATION, false);
-                curl_setopt($curlHandle, CURLOPT_POSTFIELDS,"nama_instansi=".$_POST['nama_instansi']."&alamat_instansi=".$_POST['alamat']."&kabupaten=".$_POST['kota']."&propinsi=".$_POST['propinsi']."&kontak=".$_POST['nomor_telepon']."&email=".$_POST['email']);
+                curl_setopt($curlHandle, CURLOPT_POSTFIELDS, http_build_query([
+                    'nama_instansi'   => $_POST['nama_instansi'],
+                    'alamat_instansi' => $_POST['alamat'],
+                    'kabupaten'       => $_POST['kota'],
+                    'propinsi'        => $_POST['propinsi'],
+                    'kontak'          => $_POST['nomor_telepon'],
+                    'email'           => $_POST['email'],
+                ]));
                 curl_setopt($curlHandle, CURLOPT_HEADER, 0);
                 curl_setopt($curlHandle, CURLOPT_RETURNTRANSFER, 1);
                 curl_setopt($curlHandle, CURLOPT_TIMEOUT,30);
@@ -274,6 +307,12 @@ class Admin extends AdminModule
 
     public function anyUpdates()
     {
+
+        if ($this->core->getUserInfo('role') != 'admin') {
+            $this->notify('failure', 'Anda tidak memiliki hak akses untuk halaman ini.');
+            redirect(url([ADMIN, 'settings', 'manage']));
+        }
+
         $this->tpl->set('allow_curl', intval(function_exists('curl_init')));
         $settings = $this->settings('settings');
 
